@@ -2,8 +2,8 @@
 <html lang="en-us">
   <head>
     <meta charset="UTF-8">
-    <title>Multiplayer NES Emulator</title>
-    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <title>Multiplayer NES Emulator Server</title>
+    <link rel="stylesheet" type="text/css"href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
 	<link rel="stylesheet" type="text/css" href="css/CSS.css">
   </head>
   <body>
@@ -39,7 +39,7 @@
     <div class="main-content">
 
 	<div class="title" id="title">
-		<h1>Multiplayer NES Emulator</h1>
+		<h1>Multiplayer NES Emulator Server</h1>
 	</div>
 
 	<div class="screen-container" id="screen-container">
@@ -51,13 +51,13 @@
 
 	<script src="js/cpu.js"></script>
 	<script src="js/memory.js"></script>
-	<script src="js/ppu.js"></script>
+	<script src="js/emulator.js"></script>
+	<script src="js/gpu.js"></script>
   <script src="js/input.js"></script>
 	<script src="js/interrupt.js"></script>
   <script src="js/mappers.js"></script>
   <script src="js/apu.js"></script>
   <script src="js/debug tools.js"></script>
-  <script src="js/emulator.js"></script>
   <script>
     window.onkeydown=input.keyDown;
   	window.onkeyup=input.keyUp;

@@ -690,7 +690,7 @@ var mapper4={
         case 0xD00:
         case 0xE00:
         case 0xF00:
-          return chrRom[addr+mapper4.chrBankOffset[3]-0x1C00]
+          return chrRom[addr+mapper4.chrBankOffset[3]-0xC00]
         break;
 
       }

@@ -65,10 +65,6 @@ readWord: function(addr){
 
 writeByte:function(addr, data){
 
-	if(addr>0x200&&addr<0x220){
-		console.log(addr.toString(16), data.toString(16), cpu.pc.toString(16));
-	}
-
 	switch(addr&0xF000){
 
 		case 0x0000:
