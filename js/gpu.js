@@ -230,7 +230,7 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 	}
 
 	ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
-	if ((ppu.graphicsDebug)&&(ppu.nametableByte!=0x20))console.log(ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
+	//if ((ppu.graphicsDebug)&&(ppu.nametableByte!=0x20))console.log(ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
 	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
 	},
 
@@ -238,7 +238,7 @@ fetchATByte:function(){					//acually fetches 2 bit bg pallete
 
 	var attributeTableOffset=((ppu.tileX>=32)||(ppu.tileY>=30))?0x27C0:0x23C0;
 	var offsetX=Math.floor((ppu.tileX%32)/4);
-	var offsetY=Math.floor((ppu.tileY%30)/4)*8;
+	var offsetY=Math.floor((ppu.tileY%32)/4)*8;
 	var attByte = ppu.readVRam(attributeTableOffset+offsetX+offsetY);
 	attByte>>=(ppu.tileY&0x01)?4:0;
 	attByte>>=(ppu.tileX&0x01)?2:0;
@@ -265,8 +265,10 @@ fetchSpriteLow:function(){
 	ppu.spriteTileOffset=oamBuf[ppu.spritesFound][1]*16;
 
 	var offY=((ppu.scanline+1)-oamBuf[ppu.spritesFound][0])
-	if(oamBuf[ppu.spritesFound][2]&0x80){offY=ppu.spriteSize-offY-1;}	//Y Flip
+	if(oamBuf[ppu.spritesFound][2]&0x80){offY=(ppu.spriteSize*8)-offY;}	//Y Flip
 	ppu.spriteTileOffset+=offY
+
+	if (ppu.graphicsDebug){console.log('Sprite:', oamBuf[ppu.spritesFound][1].toString(16), ppu.scanline, oamBuf[ppu.spritesFound][0], offY, (ppu.spriteTileOffset+ppu.spriteTableOffset).toString(16) );}
 
 	var byte=ppu.readVRam(ppu.spriteTableOffset+ppu.spriteTileOffset);
 
@@ -308,7 +310,7 @@ renderPixel:function(){
 
 	//Sprite Rendering
 	for(var i=7;i>=1;i--){
-		if((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8)){//x coord is in range
+		if(((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8))){//x coord is in range
 			var shift=(ppu.cycle-1)-ppu.spriteX[i];
 			var pix=((ppu.spriteShiftReg[i][0]>>(7-shift))&0x01)?1:0;
 			pix+=((ppu.spriteShiftReg[i][1]>>(7-shift))&0x01)?2:0;
@@ -378,7 +380,7 @@ spriteEval:function(){
 					case 1:	//loading and checking each sprite
 						if(!(ppu.cycle%2)){
 							oamBuf[ppu.spritesFound][0]=oam[ppu.oamPtr][0];
-							if ((oamBuf[ppu.spritesFound][0]>=(ppu.scanline+1))&&(oamBuf[ppu.spritesFound][0]<(ppu.scanline+(ppu.spriteSize*8)+1))){
+							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0]-1)&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)))){
 								ppu.srCase2Mode=2;
 								ppu.spriteTransfer=1;
 							}else {
@@ -503,7 +505,7 @@ writeByte: function(addr, data){
 			 if (data&0x20){ppu.spriteSize=2;}else{ppu.spriteSize=1}
 			 ppu.patternTableOffset=(data&0x10)<<8;
 			 ppu.spriteTableOffset=(data&0x08)<<9;
-			 if (data&0x04){ppu.incrementMode=32;}else{ppu.incrementMode=1}
+			 if (data&0x04){ppu.incrementMode=32;}else{ppu.incrementMode=1;}
 			 ppu.nametableOffset=0x2000+((data&0x03)*400);
 		break;
 
