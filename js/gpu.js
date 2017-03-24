@@ -266,6 +266,7 @@ fetchSpriteLow:function(){
 	ppu.spriteTileOffset=oamBuf[ppu.spritesFound][1]*16;
 
 	var offY=((ppu.scanline+1)-oamBuf[ppu.spritesFound][0])
+	if (offY>7){offY+=8}
 	if(oamBuf[ppu.spritesFound][2]&0x80){offY=(ppu.spriteSize*8)-offY;}	//Y Flip
 	ppu.spriteTileOffset+=offY
 
@@ -400,6 +401,7 @@ spriteEval:function(){
 						if(!(ppu.cycle%2)){
 							if(ppu.spriteTransfer<3){
 								oamBuf[ppu.spritesFound][ppu.spriteTransfer]=oam[ppu.oamPtr][ppu.spriteTransfer];
+								if((ppu.spriteTransfer===1)&&(ppu.spriteSize===2)){oamBuf[ppu.spritesFound][1]-=1}
 								ppu.spriteTransfer++;
 							}else{
 								oamBuf[ppu.spritesFound][3]=oam[ppu.oamPtr][3];
