@@ -32,4 +32,10 @@ keyUp: function(e){
   }
 },
 
+step: function(){
+  if(apu.joypad1){
+    input.strobe1=0;
+  }
+}
+
 };

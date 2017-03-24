@@ -2749,6 +2749,7 @@ ex:function(opcode){
 		ppu.step();
     ppu.spriteEval();
 	}
+  input.step();
 },
 
 reset:function(){

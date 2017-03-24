@@ -15,11 +15,11 @@ readByte(addr){
 
     case 0x4017:
     return input.shiftRegisters2[input.strobe2];
-    input.strobe1=(input.strobe1+1)%8;
+    input.strobe2=(input.strobe2+1)%8;
     break;
 
     default:
-    console.log('apu.readByte: unimplemented byte', addr);
+    //aconsole.log('apu.readByte: unimplemented byte', addr);
     break;
 
   }
@@ -38,7 +38,7 @@ writeByte(addr, data){
     break;
 
     default:
-    console.log('apu.writeByte: unimplemented byte', addr);
+    //console.log('apu.writeByte: unimplemented byte', addr);
     break;
 
   }

@@ -72,7 +72,7 @@ step:function(){
 			case 0:
 				ppu.mode=1;
 				ppu.calculateFineScroll();
-				//if(ppu.graphicsDebug){console.log(ppu.scanline, oamBufPrev);}
+				if(ppu.graphicsDebug){console.log('Scanline, ppu.scroll,:', ppu.scanline, ppu.scroll[1]);}
 			break;
 
 		case 1:
@@ -137,7 +137,6 @@ step:function(){
 			case 4:
 				if (ppu.cycle===340){ppu.mode=0;
 					 ppu.cycle=-1;
-					 //if (ppu.graphicsDebug){console.log('end scanline', ppu.scanline);}
 					 ppu.scanline=ppu.scanline+1
 					 ppu.fineScrollY=(ppu.fineScrollY+1)%8;
 				 }
@@ -151,19 +150,18 @@ step:function(){
 			 ppu.mode=0;
 			 ppu.cycle=-1;
 			 ppu.scanline=(ppu.scanline+1)%262;
-			//if (ppu.graphicsDebug){console.log('end scanline', ppu.scanline);}
 			 ppu.fineScrollY=(ppu.fineScrollY+1)%8;
 		 }
 		if (ppu.scanline===241&&ppu.cycle===1){
 			ppu.setVBlankFlag();
 			if (ppu.nmiEnable){
-			memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
-			cpu.sp-=2;
-			memory.writeByte(cpu.sp|0x100, cpu.sr|0x30);
-			cpu.sp-=1;
-			cpu.pc=memory.readWord(memory.nmiVector);
-			debug.callStack.push(cpu.pc.toString(16))
-		}
+				memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
+				cpu.sp-=2;
+				memory.writeByte(cpu.sp|0x100, cpu.sr|0x30);
+				cpu.sp-=1;
+				cpu.pc=memory.readWord(memory.nmiVector);
+				debug.callStack.push(cpu.pc.toString(16))
+			}
 			screen.putImageData(pixData,0,0);
 		}
 		if (ppu.scanline===261&&ppu.cycle===1){
@@ -194,17 +192,17 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 		console.log('mirroring mode 1 not yet supported');
 		break;
 
-		case 2:
+		case 2: //horizontal mirroring
 		ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline)/8));
 		ppu.tileY%=60;
 		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle-1)/8));
 		ppu.tileX%=32;
 		offsetY=ppu.tileY*32;;
-		if(ppu.tileY>=30){offsetY+=1024;}
+		if(ppu.tileY>=30){offsetY+=0x40;}
 		offsetX=ppu.tileX;
 		break;
 
-		case 3:
+		case 3: //vertical mirroring
 		ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline)/8));
 		ppu.tileY%=30;
 		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle-1)/8));
@@ -231,8 +229,9 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 	}
 
 	ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
-	//if ((ppu.graphicsDebug)&&(ppu.nametableByte!=0x20))console.log(ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
+		if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
 	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
+	if (ppu.graphicsDebug)console.log('tileX, tileY, nametableByte:', ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
 	},
 
 fetchATByte:function(){					//acually fetches 2 bit bg pallete
@@ -405,7 +404,7 @@ spriteEval:function(){
 								ppu.spriteTransfer++;
 							}else{
 								oamBuf[ppu.spritesFound][3]=oam[ppu.oamPtr][3];
-								if(ppu.graphicsDebug){console.log(ppu.scanline+1, ppu.spritesFound, ppu.oamPtr, oamBuf[ppu.spritesFound][1].toString(16))}
+								//if(ppu.graphicsDebug){console.log(ppu.scanline+1, ppu.spritesFound, ppu.oamPtr, oamBuf[ppu.spritesFound][1].toString(16))}
 								ppu.spriteTransfer=0;
 								ppu.oamPtr++;
 								ppu.spritesFound++;
@@ -513,7 +512,27 @@ writeByte: function(addr, data){
 			 ppu.patternTableOffset=(data&0x10)<<8;
 			 ppu.spriteTableOffset=(data&0x08)<<9;
 			 if (data&0x04){ppu.incrementMode=32;}else{ppu.incrementMode=1;}
-			 ppu.nametableOffset=0x2000+((data&0x03)*400);
+			 switch(data&0x03){
+				 case 0:
+				 	ppu.scroll[0]&=0xFF;
+					ppu.scroll[1]&=0xFF;
+				 break;
+
+				 case 1:
+				 	ppu.scroll[0]|=0x100;
+					ppu.scroll[1]&=0xFF;
+				 break;
+
+				 case 2:
+				  ppu.scroll[0]&=0xFF;
+					ppu.scroll[1]|=0x100;
+				 break;
+
+				 case 3:
+				 	ppu.scroll[0]|=0x100;
+					ppu.scroll[1]|=0x100;
+				 break;
+			 }
 		break;
 
 		case 1:
@@ -536,12 +555,12 @@ writeByte: function(addr, data){
 		break;
 
 		case 4:
-			console.log('writing sprite')
 			oam[Math.floor(ppu.oamAddr/4)][ppu.oamAddr%4]=data;
 		break;
 
 		case 5:
-			 ppu.scroll[ppu.xy]=data;
+			 ppu.scroll[ppu.xy]&=0x100;
+			 ppu.scroll[ppu.xy]|=data;
 			 ppu.xy=(ppu.xy+1)&0x1
 		break;
 
@@ -586,11 +605,11 @@ readVRam:function(addr){
 				case 0x700:
 				switch(ppu.nametableMirroring){
 
-				case 0:
-				return nameTable[0][addr-0x2400];
+				case 2:
+				return nameTable[1][addr-0x2400];
 				break
 
-				case 1:
+				case 3:
 				return nameTable[1][addr-0x2400];
 				break;
 			}
@@ -715,7 +734,7 @@ writeVRam:function(addr, data){
 					switch(ppu.nametableMirroring){
 
 					case 2:
-					 nameTable[0][addr-0x2400]=data;
+					 nameTable[1][addr-0x2400]=data;
 					break;
 
 					case 3:
