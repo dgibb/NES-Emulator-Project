@@ -72,6 +72,7 @@ step:function(){
 			case 0:
 				ppu.mode=1;
 				ppu.calculateFineScroll();
+				//if(ppu.graphicsDebug){console.log(ppu.scanline, oamBufPrev);}
 			break;
 
 		case 1:
@@ -268,7 +269,7 @@ fetchSpriteLow:function(){
 	if(oamBuf[ppu.spritesFound][2]&0x80){offY=(ppu.spriteSize*8)-offY;}	//Y Flip
 	ppu.spriteTileOffset+=offY
 
-	if (ppu.graphicsDebug){console.log('Sprite:', oamBuf[ppu.spritesFound][1].toString(16), ppu.scanline, oamBuf[ppu.spritesFound][0], offY, (ppu.spriteTileOffset+ppu.spriteTableOffset).toString(16) );}
+	//if (ppu.graphicsDebug){console.log('Sprite:', oamBuf[ppu.spritesFound][1].toString(16), ppu.scanline, oamBuf[ppu.spritesFound][0], offY, (ppu.spriteTileOffset+ppu.spriteTableOffset).toString(16) );}
 
 	var byte=ppu.readVRam(ppu.spriteTableOffset+ppu.spriteTileOffset);
 
@@ -309,12 +310,13 @@ renderPixel:function(){
 	//if (ppu.graphicsDebug){console.log('--------------------------------------------------------------');}
 
 	//Sprite Rendering
-	for(var i=7;i>=1;i--){
-		if(((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8))){//x coord is in range
+	for(var i=7;i>=0;i--){
+		if((((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8)))&&ppu.spriteX[i]!==0xFF){//x coord is in range
 			var shift=(ppu.cycle-1)-ppu.spriteX[i];
 			var pix=((ppu.spriteShiftReg[i][0]>>(7-shift))&0x01)?1:0;
 			pix+=((ppu.spriteShiftReg[i][1]>>(7-shift))&0x01)?2:0;
 				if(pix!==0){		//pix!=0 put image data
+					//if(ppu.graphicsDebug){console.log('Rendering', oamBufPrev[i][1].toString(16), 'to', ppu.scanline, (ppu.cycle-1).toString(16));}
 					var color=spritePal[ppu.attributeLatch[i]&0x03][pix];
 					pixData.data[ppu.canvasOffset-4]=palette[color][0];
 					pixData.data[ppu.canvasOffset-3]=palette[color][1];
@@ -380,7 +382,7 @@ spriteEval:function(){
 					case 1:	//loading and checking each sprite
 						if(!(ppu.cycle%2)){
 							oamBuf[ppu.spritesFound][0]=oam[ppu.oamPtr][0];
-							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0]-1)&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)))){
+							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0]-1)&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)-1))){
 								ppu.srCase2Mode=2;
 								ppu.spriteTransfer=1;
 							}else {
@@ -401,6 +403,7 @@ spriteEval:function(){
 								ppu.spriteTransfer++;
 							}else{
 								oamBuf[ppu.spritesFound][3]=oam[ppu.oamPtr][3];
+								if(ppu.graphicsDebug){console.log(ppu.scanline+1, ppu.spritesFound, ppu.oamPtr, oamBuf[ppu.spritesFound][1].toString(16))}
 								ppu.spriteTransfer=0;
 								ppu.oamPtr++;
 								ppu.spritesFound++;
@@ -409,12 +412,14 @@ spriteEval:function(){
 									ppu.srCase2Mode=3;
 									ppu.oamPtr=0;
 									ppu.spritesFound=0;
+
 								}
 							}
 						}
 					break;
 
 					case 3:
+					oamBufPrev=oamBuf;
 					if (ppu.cycle===256){
 						ppu.srCase2Mode=1;
 						ppu.srMode=3;
@@ -930,6 +935,7 @@ var bgPal=[[9,1,0,1],[0x37,0,0,0x32],[0x30,0,0,0x1C],[0x0C,0,0,0x37]];
 var spritePal=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
 var oam=[];
 var oamBuf=[];
+var oamBufPrev=[];
 
 //pallete credit to NES Hacker http://www.thealmightyguru.com/Games/Hacking/Wiki/index.php/NES_Palette
 palette=[
