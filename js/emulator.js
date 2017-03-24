@@ -44,7 +44,7 @@ loadROM: function(){
 		}
 
 		cpu.reset();
-		//emulator.runGame();
+		emulator.runGame();
 
 		}
 	input.style.display = "none";
