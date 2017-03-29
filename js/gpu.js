@@ -16,7 +16,7 @@ nametableOffset:0x2000,
 //0x2001
 bgr:0,
 spriteEnable:0,
-bgEnable:0,
+bgEnable:1,
 spriteLeftColumnEnable:0,
 bgLeftColumnEnable:0,
 greyScale:0,
@@ -39,8 +39,8 @@ vRamAddr:0,
 oamDMA:0,
 
 //Frame Rendering
-bgTileBuffer:[0,0,0,0],
-bgAttributeBuffer:[0,0],
+bgTileBuffer:[0,0,0,0,0,0],
+bgAttributeBuffer:[0,0,0],
 tileBufferOffset:0,
 palletteBuffer:[0,0],
 spriteShiftReg:[[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]],
@@ -57,6 +57,7 @@ spriteTileOffset:0,
 //Misc
 nametableMirroring:0, //see mirroring table at bottom
 graphicsDebug:0,
+spriteNumBuf:[0,0,0,0,0,0,0,0],
 
 //FSM
 scanline:261,
@@ -67,20 +68,23 @@ mode:0,
 
 step:function(){
 
+
+
 	if(ppu.scanline<240){
 		switch(ppu.mode){
 			case 0:
 				ppu.mode=1;
 				ppu.calculateFineScroll();
-				if(ppu.graphicsDebug){console.log('Scanline, ppu.scroll,:', ppu.scanline, ppu.scroll[1]);}
 			break;
 
 		case 1:
+
+		if ((ppu.fineScrollX%8)===0){ppu.shiftRegisters();}
+
 			switch (ppu.cycle&0x7){
 
 				case 1:
 					ppu.fetchNTByte();
-					ppu.shiftRegisters();
 				break;
 
 				case 3:
@@ -109,26 +113,27 @@ step:function(){
 							if (ppu.spritesFound<8)ppu.fetchSpriteHigh();
 					break;
 				}
-				if (ppu.cycle===320){ppu.mode=3} //does nothing yet
+				if (ppu.cycle===320){ppu.mode=3}
 			break;
 
 			case 3:
 				switch (ppu.cycle&0x7){
 
 					case 1:
-						//next line ntbyte
+						ppu.fetchNextLineNTByte();
+						ppu.shiftRegisters();
 					break;
 
 					case 3:
-						//ppu.fetchATByte();
+						ppu.fetchATByte();
 					break;
 
 					case 5:
-						//ppu.fetchTBLow();
+						ppu.fetchNextTBLow();
 					break;
 
 					case 7:
-						//ppu.fetchTBHigh();
+						ppu.fetchNextTBHigh();
 					break;
 					}
 					if (ppu.cycle===336){ppu.mode=4}
@@ -165,7 +170,7 @@ step:function(){
 			screen.putImageData(pixData,0,0);
 		}
 		if (ppu.scanline===261&&ppu.cycle===1){
-			ppu.registers[2]=0x7F;
+			ppu.registers[2]&=0x1F;
 			ppu.canvasOffset=0;
 		}
 		ppu.cycle++;
@@ -195,7 +200,7 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 		case 2: //horizontal mirroring
 		ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline)/8));
 		ppu.tileY%=60;
-		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle-1)/8));
+		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle+15)/8));
 		ppu.tileX%=32;
 		offsetY=ppu.tileY*32;;
 		if(ppu.tileY>=30){offsetY+=0x40;}
@@ -205,7 +210,7 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 		case 3: //vertical mirroring
 		ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline)/8));
 		ppu.tileY%=30;
-		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle-1)/8));
+		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle+15)/8));
 		ppu.tileX%=64;
 		offsetY=ppu.tileY*32;
 		if(ppu.tileX>=32){offsetX=ppu.tileX+1024;}else{offsetX=ppu.tileX}
@@ -229,9 +234,69 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 	}
 
 	ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
-		if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
+	//	if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
 	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
-	if (ppu.graphicsDebug)console.log('tileX, tileY, nametableByte:', ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
+//	if (ppu.graphicsDebug)console.log('tileX, tileY, nametableByte:', ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
+	},
+
+fetchNextLineNTByte:function(){
+
+			var offsetX;
+			var offsetY;
+
+			switch (ppu.nametableMirroring){
+
+				case 0:
+				console.log('mirroring mode 0 not yet supported');
+				break;
+
+				case 1:
+				console.log('mirroring mode 1 not yet supported');
+				break;
+
+				case 2: //horizontal mirroring
+				ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline+1)/8));
+				ppu.tileY%=60;
+				ppu.tileX=ppu.scroll[0];
+				if (ppu.cycle>321){ppu.tileX+=8;}
+				ppu.tileX=Math.floor(ppu.tileX/8);
+				ppu.tileX%=32;
+				offsetY=ppu.tileY*32;;
+				if(ppu.tileY>=30){offsetY+=0x40;}
+				offsetX=ppu.tileX;
+				break;
+
+				case 3: //vertical mirroring
+				ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline+1)/8));
+				ppu.tileY%=30;
+				ppu.tileX=(Math.floor((ppu.scroll[0]/8)));
+				ppu.tileX%=64;
+				offsetY=ppu.tileY*32;
+				if(ppu.tileX>=32){offsetX=ppu.tileX+1024;}else{offsetX=ppu.tileX}
+				break;
+
+				case 4:
+				console.log('mirroring mode 4 not yet supported');
+				break;
+
+				case 5:
+				console.log('mirroring mode 5 not yet supported');
+				break;
+
+				case 6:
+				console.log('mirroring mode 6 not yet supported');
+				break;
+
+				case 7:
+				console.log('mirroring mode 7 not yet supported');
+				break;
+			}
+
+			ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
+				//if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
+			ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
+			if (ppu.graphicsDebug)console.log('tileX, tileY, nametableByte:', ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
+			//ppu.shiftRegisters();
 	},
 
 fetchATByte:function(){					//acually fetches 2 bit bg pallete
@@ -240,8 +305,8 @@ fetchATByte:function(){					//acually fetches 2 bit bg pallete
 	var offsetX=Math.floor((ppu.tileX%32)/4);
 	var offsetY=Math.floor((ppu.tileY%32)/4)*8;
 	var attByte = ppu.readVRam(attributeTableOffset+offsetX+offsetY);
-	attByte>>=(ppu.tileY&0x01)?4:0;
-	attByte>>=(ppu.tileX&0x01)?2:0;
+	attByte>>=((ppu.tileY/2)&0x01)?4:0;
+	attByte>>=((ppu.tileX/2)&0x01)?2:0;
 	attByte&=0x03;
 	ppu.bgAttributeBuffer[0]=attByte;
 },
@@ -255,9 +320,21 @@ fetchTBHigh:function(){
 	//if (ppu.graphicsDebug)console.log(ppu.bgTileBuffer)
 },
 
+fetchNextTBLow:function(){
+	ppu.bgTileBuffer[0]=ppu.readVRam(ppu.nametableByte+((ppu.fineScrollY+1)%8));
+},
+
+fetchNextTBHigh:function(){
+	ppu.bgTileBuffer[1]=ppu.readVRam(ppu.nametableByte+8+((ppu.fineScrollY+1)%8));
+	//if (ppu.graphicsDebug)console.log(ppu.bgTileBuffer)
+},
+
 shiftRegisters:function(){
+	ppu.bgTileBuffer[4]=ppu.bgTileBuffer[2];
+	ppu.bgTileBuffer[5]=ppu.bgTileBuffer[3];
 	ppu.bgTileBuffer[2]=ppu.bgTileBuffer[0];
 	ppu.bgTileBuffer[3]=ppu.bgTileBuffer[1];
+	ppu.bgAttributeBuffer[2]=ppu.bgAttributeBuffer[1];
 	ppu.bgAttributeBuffer[1]=ppu.bgAttributeBuffer[0];
 },
 
@@ -265,8 +342,10 @@ fetchSpriteLow:function(){
 	ppu.spriteTileOffset=oamBuf[ppu.spritesFound][1]*16;
 
 	var offY=((ppu.scanline+1)-oamBuf[ppu.spritesFound][0])
-	if (offY>7){offY+=8}
-	if(oamBuf[ppu.spritesFound][2]&0x80){offY=(ppu.spriteSize*8)-offY;}	//Y Flip
+	if(oamBuf[ppu.spritesFound][2]&0x80){
+		offY=(ppu.spriteSize*8)-offY-1;
+	}
+	if (offY>7){offY+=8}	//Y Flip
 	ppu.spriteTileOffset+=offY
 
 	//if (ppu.graphicsDebug){console.log('Sprite:', oamBuf[ppu.spritesFound][1].toString(16), ppu.scanline, oamBuf[ppu.spritesFound][0], offY, (ppu.spriteTileOffset+ppu.spriteTableOffset).toString(16) );}
@@ -291,40 +370,53 @@ fetchSpriteHigh:function(){
 },
 
 renderPixel:function(){
-	var pix=((ppu.bgTileBuffer[2]>>(7-ppu.fineScrollX))&0x01)?1:0;
-	pix+=((ppu.bgTileBuffer[3]>>(7-ppu.fineScrollX))&0x01)?2:0;
-	//if (ppu.graphicsDebug){console.log(ppu.tileX, ppu.tileY);}
-	//if (ppu.graphicsDebug){console.log('bgTileBuffer:', ppu.bgTileBuffer[2], ppu.bgTileBuffer[3]);}
-	var color=bgPal[ppu.bgAttributeBuffer[1]][pix];
-	pixData.data[ppu.canvasOffset]=palette[color][0];
-	pixData.data[ppu.canvasOffset+1]=palette[color][1];
-	pixData.data[ppu.canvasOffset+2]=palette[color][2];
-	ppu.canvasOffset+=4;
-	ppu.fineScrollX=(ppu.fineScrollX+1)%8
-	//if (ppu.fineScrollX===0){ppu.shiftRegisters();}
-	//if (ppu.graphicsDebug){console.log('CYCLE:', ppu.cycle);}
-	//if (ppu.graphicsDebug){console.log('Tile:', ppu.tileX, ppu.tileY);}
-	//if (ppu.graphicsDebug){console.log('pix:', pix);}
-	//if (ppu.graphicsDebug){console.log('att:', ppu.bgAttributeBuffer[1]);}
-	//if (ppu.graphicsDebug){console.log('canvasOffset, scanlineOffset:', ppu.canvasOffset-4, (ppu.scanline*1024));}
-	//if (ppu.graphicsDebug){console.log('--------------------------------------------------------------');}
+
+	if(ppu.bgEnable){
+		if((!ppu.bgLeftColumnEnable)&&(ppu.cycle<10)){ //bgLeftColumnDisable
+			//console.log('ppu.leftColumnDisable', ppu.bgLeftColumnEnable)
+			var color=bgPal[0][0];
+			pixData.data[ppu.canvasOffset]=palette[color][0];
+			pixData.data[ppu.canvasOffset+1]=palette[color][1];
+			pixData.data[ppu.canvasOffset+2]=palette[color][2];
+			ppu.canvasOffset+=4;
+		}else{
+		var bgPix=((ppu.bgTileBuffer[4]>>(7-ppu.fineScrollX))&0x01)?1:0;
+		bgPix+=((ppu.bgTileBuffer[5]>>(7-ppu.fineScrollX))&0x01)?2:0;
+		var color=bgPal[ppu.bgAttributeBuffer[2]][bgPix];
+		pixData.data[ppu.canvasOffset]=palette[color][0];
+		pixData.data[ppu.canvasOffset+1]=palette[color][1];
+		pixData.data[ppu.canvasOffset+2]=palette[color][2];
+		ppu.canvasOffset+=4;
+		ppu.fineScrollX=(ppu.fineScrollX+1)%8
 
 	//Sprite Rendering
-	for(var i=7;i>=0;i--){
-		if((((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8)))&&ppu.spriteX[i]!==0xFF){//x coord is in range
-			var shift=(ppu.cycle-1)-ppu.spriteX[i];
-			var pix=((ppu.spriteShiftReg[i][0]>>(7-shift))&0x01)?1:0;
-			pix+=((ppu.spriteShiftReg[i][1]>>(7-shift))&0x01)?2:0;
-				if(pix!==0){		//pix!=0 put image data
-					//if(ppu.graphicsDebug){console.log('Rendering', oamBufPrev[i][1].toString(16), 'to', ppu.scanline, (ppu.cycle-1).toString(16));}
-					var color=spritePal[ppu.attributeLatch[i]&0x03][pix];
-					pixData.data[ppu.canvasOffset-4]=palette[color][0];
-					pixData.data[ppu.canvasOffset-3]=palette[color][1];
-					pixData.data[ppu.canvasOffset-2]=palette[color][2];
-
+	if(ppu.spriteEnable){
+		if(!((!ppu.spriteLeftColumnEnable)&&(ppu.cycle<10))){
+		for(var i=7;i>=0;i--){
+			if((((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8)))&&ppu.spriteX[i]!==0xFF){//x coord is in range
+				var shift=(ppu.cycle-1)-ppu.spriteX[i];
+				var pix=((ppu.spriteShiftReg[i][0]>>(7-shift))&0x01)?1:0;
+				pix+=((ppu.spriteShiftReg[i][1]>>(7-shift))&0x01)?2:0;
+					if(pix!==0){		//pix!=0 put image data
+						if((ppu.spriteNumBuf[i]===0)&&(bgPix!==0)){
+							ppu.registers[2]|=0x40;
+						}
+						var color=spritePal[ppu.attributeLatch[i]&0x03][pix];
+						pixData.data[ppu.canvasOffset-4]=palette[color][0];
+						pixData.data[ppu.canvasOffset-3]=palette[color][1];
+						pixData.data[ppu.canvasOffset-2]=palette[color][2];
+					}
+					}
 				}
 			}
 		}
+	}
+	}else{
+		pixData.data[ppu.canvasOffset]=palette[0xF][0];
+		pixData.data[ppu.canvasOffset+1]=palette[0xF][1];
+		pixData.data[ppu.canvasOffset+2]=palette[0xF][2];
+		ppu.canvasOffset+=4;
+	}
 },
 
 setVBlankFlag:function(){
@@ -382,7 +474,9 @@ spriteEval:function(){
 					case 1:	//loading and checking each sprite
 						if(!(ppu.cycle%2)){
 							oamBuf[ppu.spritesFound][0]=oam[ppu.oamPtr][0];
-							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0]-1)&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)-1))){
+							oamBuf[ppu.spritesFound][5]=ppu.oamPtr;
+							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0])&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)))){
+								oamBuf[ppu.spritesFound][0]++;
 								ppu.srCase2Mode=2;
 								ppu.spriteTransfer=1;
 							}else {
@@ -437,6 +531,7 @@ spriteEval:function(){
 
 					case 1:
 						ppu.attributeLatch[ppu.spritesFound]=oamBuf[ppu.spritesFound][2];
+						ppu.spriteNumBuf[ppu.spritesFound]=oamBuf[ppu.spritesFound][5];
 					break;
 
 					case 3:
@@ -536,18 +631,18 @@ writeByte: function(addr, data){
 		break;
 
 		case 1:
+		//console.log(data.toString(2));
 			ppu.registers[1]=data;
 			ppu.bgr=(data>>5)
 			ppu.spriteEnable=(data&0x10)?1:0;
-			ppu.bgEnable=(data&0x80)?1:0;
-			ppu.spriteLeftColumnEnable=(data&0x40)?1:0;
-			ppu.bgLeftColumnEnable=(data&0x20)?1:0;
+			ppu.bgEnable=(data&0x08)?1:0;
+			ppu.spriteLeftColumnEnable=(data&0x04)?1:0;
+			ppu.bgLeftColumnEnable=(data&0x02)?1:0;
 			ppu.greyScale=data&0x01;
 		break;
 
 		case 2:
-				ppu.registers[2]=data;
-				//set vars
+
 		break;
 
 		case 3:
@@ -822,8 +917,14 @@ writeVRam:function(addr, data){
 					case 0xF00:
 					addr=(addr-0x3F00)%0x20;
 					if (addr<=0xF){
+						if ((addr%4)===0){
+							spritePal[Math.floor(addr/4)][0]=data;
+						}
 						bgPal[Math.floor(addr/4)][addr%4]=data;
 				}else{
+					if ((addr%4)===0){
+						bgPal[Math.floor(addr/4)-4][0]=data;
+					}
 						spritePal[Math.floor(addr/4)-4][addr%4]=data;
 					}
 				}
@@ -867,7 +968,7 @@ oamInit:function(){
 		oam[i]=[0,0,0,0];
 	}
 	for(var i=0;i<8;i++){
-		oamBuf[i]=[0,0,0,0];
+		oamBuf[i]=[0,0,0,0,0];
 	}
 },
 
@@ -952,11 +1053,10 @@ customPPUTest:function(){
 
 var chrRom=[];
 var nameTable=[[],[],[],[]];
-var bgPal=[[9,1,0,1],[0x37,0,0,0x32],[0x30,0,0,0x1C],[0x0C,0,0,0x37]];
+var bgPal=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
 var spritePal=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
 var oam=[];
 var oamBuf=[];
-var oamBufPrev=[];
 
 //pallete credit to NES Hacker http://www.thealmightyguru.com/Games/Hacking/Wiki/index.php/NES_Palette
 palette=[

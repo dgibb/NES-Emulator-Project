@@ -36,6 +36,10 @@ step: function(){
   if(apu.joypad1){
     input.strobe1=0;
   }
+
+  if(apu.joypad2){
+    input.strobe2=0;
+  }
 }
 
 };

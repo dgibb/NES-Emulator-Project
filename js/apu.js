@@ -6,16 +6,19 @@ var apu={
   joypad2:0,  //0x4017 (write/set strobe)
 
 readByte(addr){
+
   switch(addr){
 
     case 0x4016:
-    return input.shiftRegisters1[input.strobe1];
+    var out = input.shiftRegisters1[input.strobe1];
     input.strobe1=(input.strobe1+1)%8;
+    return out;
     break;
 
     case 0x4017:
-    return input.shiftRegisters2[input.strobe2];
+    var out = input.shiftRegisters2[input.strobe2];
     input.strobe2=(input.strobe2+1)%8;
+    return out;
     break;
 
     default:
