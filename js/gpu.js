@@ -39,6 +39,8 @@ vRamAddr:0,
 oamDMA:0,
 
 //Frame Rendering
+ntByteBuffer:[0,0,0,0,0,0],
+ntByteBufHelper:[0,0,0,0,0,0,0],
 bgTileBuffer:[0,0,0,0,0,0],
 bgAttributeBuffer:[0,0,0],
 tileBufferOffset:0,
@@ -75,11 +77,16 @@ step:function(){
 			case 0:
 				ppu.mode=1;
 				ppu.calculateFineScroll();
+				//if (ppu.graphicsDebug){console.log('cycle 0 fineScrollX: ', ppu.fineScrollX)}
+				//if (ppu.graphicsDebug)console.log('ntByteBuffer:', ppu.ntByteBuffer[0],ppu.ntByteBuffer[1],ppu.ntByteBuffer[2],ppu.ntByteBuffer[3],ppu.ntByteBuffer[4],ppu.ntByteBuffer[5]);
 			break;
 
 		case 1:
 
-		if ((ppu.fineScrollX%8)===0){ppu.shiftRegisters();}
+		if ((ppu.fineScrollX%8)===0&&ppu.cycle>8){
+		//if (ppu.graphicsDebug&&(ppu.cycle<24))console.log('shiftReg pixel', ppu.cycle-1, (ppu.cycle-1)%8);
+			ppu.shiftRegisters();
+		}
 
 			switch (ppu.cycle&0x7){
 
@@ -97,6 +104,7 @@ step:function(){
 
 				case 7:
 					ppu.fetchTBHigh();
+					ppu.shiftRegisters2();
 				break;
 				}
 				ppu.renderPixel();
@@ -117,11 +125,20 @@ step:function(){
 			break;
 
 			case 3:
+
+				ppu.fineScrollX=(ppu.fineScrollX+1)%8
+
+			if ((ppu.fineScrollX%8)===0){
+			//if (ppu.graphicsDebug&&(ppu.cycle<24))console.log('shiftReg pixel', ppu.cycle-1, (ppu.cycle-1)%8);
+				ppu.shiftRegisters();
+			}
+
 				switch (ppu.cycle&0x7){
 
 					case 1:
 						ppu.fetchNextLineNTByte();
-						ppu.shiftRegisters();
+
+
 					break;
 
 					case 3:
@@ -134,6 +151,7 @@ step:function(){
 
 					case 7:
 						ppu.fetchNextTBHigh();
+						ppu.shiftRegisters2();
 					break;
 					}
 					if (ppu.cycle===336){ppu.mode=4}
@@ -155,7 +173,6 @@ step:function(){
 			 ppu.mode=0;
 			 ppu.cycle=-1;
 			 ppu.scanline=(ppu.scanline+1)%262;
-			 ppu.fineScrollY=(ppu.fineScrollY+1)%8;
 		 }
 		if (ppu.scanline===241&&ppu.cycle===1){
 			ppu.setVBlankFlag();
@@ -234,7 +251,10 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 	}
 
 	ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
-	//	if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
+	ppu.ntByteBuffer[0]=ppu.tileX;
+	ppu.ntByteBuffer[1]=ppu.tileY;
+	ppu.ntByteBufHelper[0]=ppu.cycle;
+		//if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
 	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
 //	if (ppu.graphicsDebug)console.log('tileX, tileY, nametableByte:', ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
 	},
@@ -258,7 +278,7 @@ fetchNextLineNTByte:function(){
 				ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline+1)/8));
 				ppu.tileY%=60;
 				ppu.tileX=ppu.scroll[0];
-				if (ppu.cycle>321){ppu.tileX+=8;}
+				if (ppu.cycle>323){ppu.tileX+=8;}
 				ppu.tileX=Math.floor(ppu.tileX/8);
 				ppu.tileX%=32;
 				offsetY=ppu.tileY*32;;
@@ -293,9 +313,12 @@ fetchNextLineNTByte:function(){
 			}
 
 			ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
-				//if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
+			ppu.ntByteBuffer[0]=ppu.tileX;
+			ppu.ntByteBuffer[1]=ppu.tileY;
+			ppu.ntByteBufHelper[0]=ppu.cycle;
+			//if (ppu.graphicsDebug)console.log('offsetX, offsetY, nametableOffset, nametableByte:', offsetX.toString(16), offsetY.toString(16), ppu.nametableOffset.toString(16))
 			ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
-			if (ppu.graphicsDebug)console.log('tileX, tileY, nametableByte:', ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
+		//	if (ppu.graphicsDebug)console.log('tileX, tileY, nametableByte:', ppu.tileX, ppu.tileY, ppu.nametableByte.toString(16))
 			//ppu.shiftRegisters();
 	},
 
@@ -330,16 +353,51 @@ fetchNextTBHigh:function(){
 },
 
 shiftRegisters:function(){
+	ppu.bgTileBuffer[6]=ppu.bgTileBuffer[4];
+	ppu.bgTileBuffer[7]=ppu.bgTileBuffer[5];
 	ppu.bgTileBuffer[4]=ppu.bgTileBuffer[2];
 	ppu.bgTileBuffer[5]=ppu.bgTileBuffer[3];
-	ppu.bgTileBuffer[2]=ppu.bgTileBuffer[0];
-	ppu.bgTileBuffer[3]=ppu.bgTileBuffer[1];
+
+	ppu.ntByteBuffer[6]=ppu.ntByteBuffer[4];
+	ppu.ntByteBuffer[7]=ppu.ntByteBuffer[5];
+	ppu.ntByteBuffer[4]=ppu.ntByteBuffer[2];
+	ppu.ntByteBuffer[5]=ppu.ntByteBuffer[3];
+
+	ppu.bgAttributeBuffer[3]=ppu.bgAttributeBuffer[2];
 	ppu.bgAttributeBuffer[2]=ppu.bgAttributeBuffer[1];
-	ppu.bgAttributeBuffer[1]=ppu.bgAttributeBuffer[0];
+
+	ppu.ntByteBufHelper[3]=ppu.ntByteBufHelper[2];
+	ppu.ntByteBufHelper[2]=ppu.ntByteBufHelper[1];
+
+
+
+	if (ppu.graphicsDebug&&(ppu.cycle<24||ppu.cycle>256))console.log('shiftReg: Cycle, ntByteBuffer', ppu.cycle, '-', ppu.ntByteBuffer[0],ppu.ntByteBufHelper[0],ppu.ntByteBuffer[2],ppu.ntByteBufHelper[1],ppu.ntByteBuffer[4],ppu.ntByteBufHelper[2],ppu.ntByteBuffer[6],ppu.ntByteBufHelper[3]);
+
 },
 
+shiftRegisters2:function(){
+ppu.bgTileBuffer[2]=ppu.bgTileBuffer[0];
+ppu.bgTileBuffer[3]=ppu.bgTileBuffer[1];
+
+ppu.ntByteBuffer[2]=ppu.ntByteBuffer[0];
+ppu.ntByteBuffer[3]=ppu.ntByteBuffer[1];
+
+ppu.bgAttributeBuffer[1]=ppu.bgAttributeBuffer[0];
+
+ppu.ntByteBufHelper[1]=ppu.ntByteBufHelper[0];
+
+
+if (ppu.graphicsDebug&&(ppu.cycle<24||ppu.cycle>256))console.log('shiftReg2: Cycle, ntByteBuffer', ppu.cycle, '-', ppu.ntByteBuffer[0],ppu.ntByteBufHelper[0],ppu.ntByteBuffer[2],ppu.ntByteBufHelper[1],ppu.ntByteBuffer[4],ppu.ntByteBufHelper[2],ppu.ntByteBuffer[6],ppu.ntByteBufHelper[3]);
+
+},
+
+
+
 fetchSpriteLow:function(){
-	ppu.spriteTileOffset=oamBuf[ppu.spritesFound][1]*16;
+
+	ppu.spriteTileOffset=oamBuf[ppu.spritesFound][1];
+	if(ppu.spriteSize===2){ppu.spriteTileOffset&=0xFE;}
+	ppu.spriteTileOffset*=16;
 
 	var offY=((ppu.scanline+1)-oamBuf[ppu.spritesFound][0])
 	if(oamBuf[ppu.spritesFound][2]&0x80){
@@ -348,9 +406,14 @@ fetchSpriteLow:function(){
 	if (offY>7){offY+=8}	//Y Flip
 	ppu.spriteTileOffset+=offY
 
+	if(ppu.spriteSize===2){
+		ppu.spriteTileOffset+=(oamBuf[ppu.spritesFound][1]&0x01)?0x1000:0;
+	}else{
+		ppu.spriteTileOffset+=ppu.spriteTableOffset
+	}
 	//if (ppu.graphicsDebug){console.log('Sprite:', oamBuf[ppu.spritesFound][1].toString(16), ppu.scanline, oamBuf[ppu.spritesFound][0], offY, (ppu.spriteTileOffset+ppu.spriteTableOffset).toString(16) );}
 
-	var byte=ppu.readVRam(ppu.spriteTableOffset+ppu.spriteTileOffset);
+	var byte=ppu.readVRam(ppu.spriteTileOffset);
 
 	if (oamBuf[ppu.spritesFound][2]&0x40){byte=ppu.xFlip(byte);} //X flip
 
@@ -362,7 +425,7 @@ fetchSpriteLow:function(){
 
 fetchSpriteHigh:function(){
 
-	var byte=ppu.readVRam(ppu.spriteTableOffset+ppu.spriteTileOffset);
+	var byte=ppu.readVRam(ppu.spriteTileOffset);
 	if (oamBuf[ppu.spritesFound][2]&0x40){byte=ppu.xFlip(byte);} //X flip
 	ppu.spriteShiftReg[ppu.spritesFound][1]=byte;
 	ppu.spritesFound++;
@@ -372,17 +435,24 @@ fetchSpriteHigh:function(){
 renderPixel:function(){
 
 	if(ppu.bgEnable){
-		if((!ppu.bgLeftColumnEnable)&&(ppu.cycle<10)){ //bgLeftColumnDisable
-			//console.log('ppu.leftColumnDisable', ppu.bgLeftColumnEnable)
+
+		if (ppu.graphicsDebug&&ppu.cycle<24)console.log('rederpixel:', ppu.cycle, ppu.ntByteBuffer[6], ppu.ntByteBufHelper[3]);
+		//	if (ppu.graphicsDebug&&(ppu.scanline>114&&ppu.scanline<116))console.log('ppu.ntByteBuffer:',  ppu.ntByteBuffer[0],ppu.ntByteBuffer[1],ppu.ntByteBuffer[2],ppu.ntByteBuffer[3],ppu.ntByteBuffer[4],ppu.ntByteBuffer[5]);
+			//if (ppu.graphicsDebug&&(ppu.scanline>114&&ppu.scanline<116))console.log('ppu.ntByteBuffer:',  ppu.bgTileBuffer[0],ppu.bgTileBuffer[1],ppu.bgTileBuffer[2],ppu.bgTileBuffer[3],ppu.bgTileBuffer[4],ppu.bgTileBuffer[5]);
+
+
+
+		if((!ppu.bgLeftColumnEnable)&&(ppu.cycle<9)){ //bgLeftColumnDisable
 			var color=bgPal[0][0];
 			pixData.data[ppu.canvasOffset]=palette[color][0];
 			pixData.data[ppu.canvasOffset+1]=palette[color][1];
 			pixData.data[ppu.canvasOffset+2]=palette[color][2];
 			ppu.canvasOffset+=4;
+			ppu.fineScrollX=(ppu.fineScrollX+1)%8
 		}else{
-		var bgPix=((ppu.bgTileBuffer[4]>>(7-ppu.fineScrollX))&0x01)?1:0;
-		bgPix+=((ppu.bgTileBuffer[5]>>(7-ppu.fineScrollX))&0x01)?2:0;
-		var color=bgPal[ppu.bgAttributeBuffer[2]][bgPix];
+		var bgPix=((ppu.bgTileBuffer[6]>>(7-ppu.fineScrollX))&0x01)?1:0;
+		bgPix+=((ppu.bgTileBuffer[7]>>(7-ppu.fineScrollX))&0x01)?2:0;
+		var color=bgPal[ppu.bgAttributeBuffer[3]][bgPix];
 		pixData.data[ppu.canvasOffset]=palette[color][0];
 		pixData.data[ppu.canvasOffset+1]=palette[color][1];
 		pixData.data[ppu.canvasOffset+2]=palette[color][2];
@@ -391,14 +461,14 @@ renderPixel:function(){
 
 	//Sprite Rendering
 	if(ppu.spriteEnable){
-		if(!((!ppu.spriteLeftColumnEnable)&&(ppu.cycle<10))){
+		if(!((!ppu.spriteLeftColumnEnable)&&(ppu.cycle<9))){
 		for(var i=7;i>=0;i--){
-			if((((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8)))&&ppu.spriteX[i]!==0xFF){//x coord is in range
+			if((((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8)))&&ppu.spriteX[i]<0xFF){//x coord is in range
 				var shift=(ppu.cycle-1)-ppu.spriteX[i];
 				var pix=((ppu.spriteShiftReg[i][0]>>(7-shift))&0x01)?1:0;
 				pix+=((ppu.spriteShiftReg[i][1]>>(7-shift))&0x01)?2:0;
 					if(pix!==0){		//pix!=0 put image data
-						if((ppu.spriteNumBuf[i]===0)&&(bgPix!==0)){
+						if((ppu.spriteNumBuf[i]===0)&&(bgPix!==0)&&(ppu.cycle!==256)){
 							ppu.registers[2]|=0x40;
 						}
 						var color=spritePal[ppu.attributeLatch[i]&0x03][pix];
@@ -475,7 +545,7 @@ spriteEval:function(){
 						if(!(ppu.cycle%2)){
 							oamBuf[ppu.spritesFound][0]=oam[ppu.oamPtr][0];
 							oamBuf[ppu.spritesFound][5]=ppu.oamPtr;
-							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0])&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)))){
+							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0])&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)))&&(ppu.scanline<0xEF)){
 								oamBuf[ppu.spritesFound][0]++;
 								ppu.srCase2Mode=2;
 								ppu.spriteTransfer=1;
@@ -494,7 +564,6 @@ spriteEval:function(){
 						if(!(ppu.cycle%2)){
 							if(ppu.spriteTransfer<3){
 								oamBuf[ppu.spritesFound][ppu.spriteTransfer]=oam[ppu.oamPtr][ppu.spriteTransfer];
-								if((ppu.spriteTransfer===1)&&(ppu.spriteSize===2)){oamBuf[ppu.spritesFound][1]-=1}
 								ppu.spriteTransfer++;
 							}else{
 								oamBuf[ppu.spritesFound][3]=oam[ppu.oamPtr][3];
@@ -561,16 +630,17 @@ readByte: function(addr){
 	switch (addr%8){
 
     case 0:
-    	return ppu.registers[0]
+    	return ppu.registers[0];
     break;
 
     case 1:
-      return ppu.registers[1]
+      return ppu.registers[1];
     break;
 
     case 2:
-      return ppu.registers[2];
-					ppu.registers[2]&=0x7F;
+			var ret=ppu.registers[2];
+			ppu.registers[2]&=0x7F;
+      return ret;
     break;
 
 		case 3:
