@@ -28,17 +28,19 @@ spriteOverflow:0,
 //0x2003
 oamAddr:0,
 
-//0x2005
-scroll:[0,0],
-xy:0,
+//0x2005 & 0x2006
+v:0,				//  current VRAM address 15 bit
+t:0,				//  temp VRAM address 15 bit, holds position of upper left tile
 
-//0x2006
-vRamAddr:0,
+fineX:0,    //  x register, fine x scroll
+
+writeToggle:0, //w register read/Write toggle for 0x2005 & 0x2006
 
 //0x2014
 oamDMA:0,
 
 //Frame Rendering
+currentTile:[0,0,0,0],
 ntByteBuffer:[0,0,0,0,0,0],
 ntByteBufHelper:[0,0,0,0,0,0,0],
 bgTileBuffer:[0,0,0,0,0,0],
@@ -52,8 +54,6 @@ canvasOffset:0,
 tileX:0,
 tileY:0,
 nametableByte:0,
-fineScrollX:0,
-fineScrollY:0,
 spriteTileOffset:0,
 
 //Misc
@@ -64,80 +64,222 @@ spriteNumBuf:[0,0,0,0,0,0,0,0],
 //FSM
 scanline:261,
 cycle:0,
-mode:0,
+cycleMode:0,
+scanlineMode:3,		//0: visible scanline, 1: vBlank:, 2: post-render line (241) 3:pre-render line(261)
 
 //bg rendering
 
 step:function(){
 
+	switch(ppu.scanlineMode){
 
+		case 0:		//ppu.scanlineMode visible Scanlines
+			switch(ppu.cycleMode){
 
-	if(ppu.scanline<240){
-		switch(ppu.mode){
-			case 0:
-				ppu.mode=1;
-				ppu.calculateFineScroll();
-				//if (ppu.graphicsDebug){console.log('cycle 0 fineScrollX: ', ppu.fineScrollX)}
-				//if (ppu.graphicsDebug)console.log('ntByteBuffer:', ppu.ntByteBuffer[0],ppu.ntByteBuffer[1],ppu.ntByteBuffer[2],ppu.ntByteBuffer[3],ppu.ntByteBuffer[4],ppu.ntByteBuffer[5]);
-			break;
-
-		case 1:
-
-		if ((ppu.fineScrollX%8)===0&&ppu.cycle>8){
-		//if (ppu.graphicsDebug&&(ppu.cycle<24))console.log('shiftReg pixel', ppu.cycle-1, (ppu.cycle-1)%8);
-			ppu.shiftRegisters();
-		}
-
-			switch (ppu.cycle&0x7){
-
-				case 1:
-					ppu.fetchNTByte();
+				case 0:	//ppu.cycleMode: idle cycle
+					ppu.cycleMode=1;
 				break;
 
-				case 3:
-					ppu.fetchATByte();
+		case 1:	//ppu.cycleMode: pixel rendering phase
+
+        if(ppu.fineX===0){ppu.updateCurrentTile();}
+
+					switch (ppu.cycle&0x7){
+
+						case 0:
+            if(ppu.bgEnable){
+              if ((ppu.v&0x001F) === 31){
+                ppu.v&=0xFFE0;
+                if(ppu.nametableMirroring===3){
+                ppu.v^=0x0400;
+              }
+              }else{
+                ppu.v++;
+              }
+            }
+						break;
+
+						case 1:
+              ppu.shiftRegisters();
+							ppu.fetchNTByte();
+						break;
+
+						case 3:
+							ppu.fetchATByte();
+						break;
+
+						case 5:
+							ppu.fetchTBLow();
+						break;
+
+						case 7:
+							ppu.fetchTBHigh();
+						break;
+					}
+
+					ppu.renderPixel();
+
+					if (ppu.cycle===256){				//changes mode, advances v.fineY
+						ppu.cycleMode=2;
+            if(ppu.bgEnable){
+						if ((ppu.v&0x7000)!==0x7000){
+              ppu.v+=0x1000;
+            }else{
+              ppu.v&=0x0FFF;
+              var y=(ppu.v&0x03E0)>>5;
+              if (y===29){
+                y=0;
+                if(ppu.nametableMirroring===2&&ppu.scanline<239){
+                ppu.v^=0x0800;
+              }
+              }else{
+                y+=1;
+              }
+              ppu.v&=0xFC1F;
+              ppu.v|=(y<<5);
+            }
+          }
+        }
 				break;
 
-				case 5:
-					ppu.fetchTBLow();
-				break;
+				case 2:	//ppu.cycleMode: sprite fetching phase
 
-				case 7:
-					ppu.fetchTBHigh();
-					ppu.shiftRegisters2();
-				break;
-				}
-				ppu.renderPixel();
-				if (ppu.cycle===256){ppu.mode=2;}
-			break;
+					if (ppu.cycle===257){    //copies ppu.t horizontal data to ppu.t
+            if(ppu.bgEnable){
+            ppu.v&=0xFBE0;
+            ppu.v|=(ppu.t&0x041F);
+            }
+					}
 
-			case 2:
-				switch (ppu.cycle&0x7){
-					case 5:
-						if (ppu.spritesFound<8){ppu.fetchSpriteLow();}
-					break;
+					switch (ppu.cycle&0x7){
+						case 5:
+							if (ppu.spritesFound<8){ppu.fetchSpriteLow();}
+						break;
 
-					case 7:
+						case 7:
 							if (ppu.spritesFound<8)ppu.fetchSpriteHigh();
-					break;
+						break;
+					}
+
+					if (ppu.cycle===320){ppu.cycleMode=3}
+				break;
+
+				case 3://ppu.cycleMode: fetch next line data
+
+					ppu.fineX=(ppu.fineX+1)%8
+
+					switch (ppu.cycle&0x7){
+
+            case 0:
+            if(ppu.bgEnable){
+            if ((ppu.v&0x001F) === 31){
+              ppu.v&=0xFFE0;
+                if(ppu.nametableMirroring===3){
+              ppu.v^=0x0400;
+            }
+            }else{
+              ppu.v++;
+            }
+          }
+            break;
+
+						case 1:
+							ppu.fetchNTByte();
+						break;
+
+						case 3:
+							ppu.fetchATByte();
+						break;
+
+						case 5:
+							ppu.fetchTBLow();
+						break;
+
+						case 7:
+							ppu.fetchTBHigh();
+						break;
+						}
+
+						if (ppu.cycle===336){ppu.cycleMode=4}
+				break;
+
+				case 4:	//ppu.cycleMode: garbage fetches
+					if (ppu.cycle===340){
+						if(ppu.scanline===239){ppu.scanlineMode=1;}
+						ppu.cycleMode=0;
+					 	ppu.cycle=-1;
+					 	ppu.scanline++;
+				 	}
+				break;
+			}
+		break;
+
+		case 1:	//ppu.scanlinemode: Vblank
+				if (ppu.cycle===340){
+					if (ppu.scanline===240){ppu.scanlineMode=2;}
+					else if (ppu.scanline===260){ppu.scanlineMode=3;}
+			 		ppu.cycleMode=0;
+			 		ppu.cycle=-1;
+			 		ppu.scanline=(ppu.scanline+1)%262;
+		 		}
+		break;
+
+		case 2: //ppu.scanlinemode: post-render line(241)
+
+				if (ppu.cycle===1){
+					ppu.setVBlankFlag();
+					if (ppu.nmiEnable){
+						memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
+						cpu.sp-=2;
+						memory.writeByte(cpu.sp|0x100, cpu.sr|0x30);
+						cpu.sp-=1;
+						cpu.pc=memory.readWord(memory.nmiVector);
+					}
+					screen.putImageData(pixData,0,0);
 				}
-				if (ppu.cycle===320){ppu.mode=3}
-			break;
+				if (ppu.cycle===340){
+					ppu.scanlineMode=1;
+					ppu.cycleMode=1;
+			 		ppu.cycle=-1;
+			 		ppu.scanline=(ppu.scanline+1)%262;
+				}
+		break;
 
-			case 3:
+		case 3:	//ppu.scanlinemode: pre-render line (261)
 
-				ppu.fineScrollX=(ppu.fineScrollX+1)%8
-
-			if ((ppu.fineScrollX%8)===0){
-				ppu.shiftRegisters();
+			if (ppu.cycle===1){
+				ppu.registers[2]&=0x1F;
+				ppu.canvasOffset=0;
 			}
 
+      if (ppu.cycle>=280&&ppu.cycle<=304){  //copies ppu.t vertical data to ppu.v
+        if(ppu.bgEnable){
+        ppu.v&=0x081F;
+        ppu.v|=(ppu.t&0xF7E0);
+        }
+      }
+
+
+			if (ppu.cycle>320&&ppu.cycle<=336){
+
 				switch (ppu.cycle&0x7){
 
+          case 0:
+          if(ppu.bgEnable){
+          if ((ppu.v&0x001F) === 31){
+            ppu.v&=0xFFE0;
+            if(ppu.nametableMirroring===3){
+            ppu.v^=0x0400;
+          }
+          }else{
+            ppu.v++;
+          }
+        }
+          break;
+
 					case 1:
-						ppu.fetchNextLineNTByte();
-
-
+            ppu.shiftRegisters();
+						ppu.fetchNTByte();
 					break;
 
 					case 3:
@@ -145,269 +287,74 @@ step:function(){
 					break;
 
 					case 5:
-						ppu.fetchNextTBLow();
+						ppu.fetchTBLow();
 					break;
 
 					case 7:
-						ppu.fetchNextTBHigh();
-						ppu.shiftRegisters2();
+						ppu.fetchTBHigh();
 					break;
-					}
-					if (ppu.cycle===336){ppu.mode=4}
-				break;
-
-			case 4:
-				if (ppu.cycle===340){ppu.mode=0;
-					 ppu.cycle=-1;
-					 ppu.scanline=ppu.scanline+1
-					 ppu.fineScrollY=(ppu.fineScrollY+1)%8;
-				 }
-				break;
-		}
-		ppu.cycle++;
-
-		}else{
-
-		if (ppu.cycle===340){
-			 ppu.mode=0;
-			 ppu.cycle=-1;
-			 ppu.scanline=(ppu.scanline+1)%262;
-		 }
-		if (ppu.scanline===241&&ppu.cycle===1){
-			ppu.setVBlankFlag();
-			if (ppu.nmiEnable){
-				memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
-				cpu.sp-=2;
-				memory.writeByte(cpu.sp|0x100, cpu.sr|0x30);
-				cpu.sp-=1;
-				cpu.pc=memory.readWord(memory.nmiVector);
-				debug.callStack.push(cpu.pc.toString(16))
-			}
-			screen.putImageData(pixData,0,0);
-		}
-		if (ppu.scanline===261&&ppu.cycle===1){
-			ppu.registers[2]&=0x1F;
-			ppu.canvasOffset=0;
-		}
-		if (ppu.scanline===261&&(ppu.cycle>320&&ppu.cycle<=336)){
-					ppu.fineScrollX=(ppu.fineScrollX+1)%8
-							if ((ppu.fineScrollX%8)===0){
-					ppu.shiftRegisters();
 				}
-								switch (ppu.cycle&0x7){
-									case 1:
-										ppu.fetchNextLineNTByte();
-									break;
+			}
 
-									case 3:
-										ppu.fetchATByte();
-									break;
-
-									case 5:
-										ppu.fetchNextTBLow();
-									break;
-
-									case 7:
-									ppu.fetchNextTBHigh();
-									ppu.shiftRegisters2();
-									break;
-								}
-							}
-		ppu.cycle++;
+			if (ppu.cycle===340){
+				ppu.scanlineMode=0;
+				ppu.cycleMode=0
+				ppu.cycle=-1;
+				ppu.scanline=(ppu.scanline+1)%262;
+			}
+		break;
 	}
-},
 
-calculateFineScroll:function(){
-	ppu.fineScrollX=(ppu.scroll[0]+ppu.cycle)%8;
-	ppu.fineScrollY=(ppu.scroll[1]+ppu.scanline)%8;
+		ppu.cycle++;
 },
 
 fetchNTByte:function(){					//actually fetches patternTable address;
-
-	var offsetX;
-	var offsetY;
-
-	switch (ppu.nametableMirroring){
-
-		case 0:
-		console.log('mirroring mode 0 not yet supported');
-		break;
-
-		case 1:
-		console.log('mirroring mode 1 not yet supported');
-		break;
-
-		case 2: //horizontal mirroring
-		ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline)/8));
-		ppu.tileY%=60;
-		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle+15)/8));
-		ppu.tileX%=32;
-		offsetY=ppu.tileY*32;;
-		if(ppu.tileY>=30){offsetY+=0x40;}
-		offsetX=ppu.tileX;
-		break;
-
-		case 3: //vertical mirroring
-		ppu.tileY=(Math.floor((ppu.scroll[1]+ppu.scanline)/8));
-		ppu.tileY%=30;
-		ppu.tileX=(Math.floor((ppu.scroll[0]+ppu.cycle+15)/8));
-		ppu.tileX%=64;
-		offsetY=ppu.tileY*32;
-		if(ppu.tileX>=32){offsetX=ppu.tileX+1024;}else{offsetX=ppu.tileX}
-		break;
-
-		case 4:
-		console.log('mirroring mode 4 not yet supported');
-		break;
-
-		case 5:
-		console.log('mirroring mode 5 not yet supported');
-		break;
-
-		case 6:
-		console.log('mirroring mode 6 not yet supported');
-		break;
-
-		case 7:
-		console.log('mirroring mode 7 not yet supported');
-		break;
-	}
-
-	ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
-	ppu.ntByteBuffer[0]=ppu.tileX;
-	ppu.ntByteBuffer[1]=ppu.tileY;
-	ppu.ntByteBufHelper[0]=ppu.cycle;
-	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
-	},
-
-fetchNextLineNTByte:function(){
-
-			var offsetX;
-			var offsetY;
-
-			switch (ppu.nametableMirroring){
-
-				case 0:
-				console.log('mirroring mode 0 not yet supported');
-				break;
-
-				case 1:
-				console.log('mirroring mode 1 not yet supported');
-				break;
-
-				case 2: //horizontal mirroring
-				ppu.tileY=(Math.floor((ppu.scroll[1]+((ppu.scanline+1)%262))/8));
-				ppu.tileY%=60;
-				ppu.tileX=ppu.scroll[0];
-				if (ppu.cycle>323){ppu.tileX+=8;}
-				ppu.tileX=Math.floor(ppu.tileX/8);
-				ppu.tileX%=32;
-				offsetY=ppu.tileY*32;;
-				if(ppu.tileY>=30){offsetY+=0x40;}
-				offsetX=ppu.tileX;
-				break;
-
-				case 3: //vertical mirroring
-				ppu.tileY=(Math.floor((ppu.scroll[1]+((ppu.scanline+1)%262))/8));
-				ppu.tileY%=30;
-				ppu.tileX=(Math.floor((ppu.scroll[0]/8)));
-				ppu.tileX%=64;
-				offsetY=ppu.tileY*32;
-				if(ppu.tileX>=32){offsetX=ppu.tileX+1024;}else{offsetX=ppu.tileX}
-				break;
-
-				case 4:
-				console.log('mirroring mode 4 not yet supported');
-				break;
-
-				case 5:
-				console.log('mirroring mode 5 not yet supported');
-				break;
-
-				case 6:
-				console.log('mirroring mode 6 not yet supported');
-				break;
-
-				case 7:
-				console.log('mirroring mode 7 not yet supported');
-				break;
-			}
-
-			ppu.nametableByte=ppu.readVRam(ppu.nametableOffset+offsetX+offsetY);//nametable Byte
-			ppu.ntByteBuffer[0]=ppu.tileX;
-			ppu.ntByteBuffer[1]=ppu.tileY;
-			ppu.ntByteBufHelper[0]=ppu.cycle;
-			ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset;//tile pattern address
-	},
+  var x=ppu.v&0x1F;
+  var y=(ppu.v>>5)&0x1F;
+  var nt=(ppu.v>>10)&0x3
+  var address = (ppu.v&0xFFF)+0x2000
+	ppu.nametableByte=ppu.readVRam(address);//nametable Byte
+  if (ppu.graphicsDebug&&((ppu.v>>12)===0)){console.log(ppu.scanline, ppu.cycle, '-', ppu.nametableByte.toString(16), x.toString(16), y.toString(16), nt.toString(16))}
+	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset+(ppu.v>>12);//tile pattern address
+},
 
 fetchATByte:function(){					//acually fetches 2 bit bg pallete
-
-	var attributeTableOffset=((ppu.tileX>=32)||(ppu.tileY>=30))?0x27C0:0x23C0;
-	var offsetX=Math.floor((ppu.tileX%32)/4);
-	var offsetY=Math.floor((ppu.tileY%32)/4)*8;
-	var attByte = ppu.readVRam(attributeTableOffset+offsetX+offsetY);
-	attByte>>=((ppu.tileY/2)&0x01)?4:0;
-	attByte>>=((ppu.tileX/2)&0x01)?2:0;
+  var address=0x23C0|(ppu.v&0x0C00)|((ppu.v>>4)&0x38)|((ppu.v>>2)&0x07);
+	var attByte = ppu.readVRam(address);
+	attByte>>=(ppu.v&0x40)?4:0;
+	attByte>>=(ppu.v&0x02)?2:0;
 	attByte&=0x03;
 	ppu.bgAttributeBuffer[0]=attByte;
 },
 
 fetchTBLow:function(){
-	ppu.bgTileBuffer[0]=ppu.readVRam(ppu.nametableByte+ppu.fineScrollY);
+	ppu.bgTileBuffer[0]=ppu.readVRam(ppu.nametableByte);
+  ppu.nametableByte+=8;
 },
 
 fetchTBHigh:function(){
-	ppu.bgTileBuffer[1]=ppu.readVRam(ppu.nametableByte+8+ppu.fineScrollY);
-},
-
-fetchNextTBLow:function(){
-	ppu.bgTileBuffer[0]=ppu.readVRam(ppu.nametableByte+((ppu.fineScrollY+1)%8));
-},
-
-fetchNextTBHigh:function(){
-	ppu.bgTileBuffer[1]=ppu.readVRam(ppu.nametableByte+8+((ppu.fineScrollY+1)%8));
+	ppu.bgTileBuffer[1]=ppu.readVRam(ppu.nametableByte);
 },
 
 shiftRegisters:function(){
-	ppu.bgTileBuffer[6]=ppu.bgTileBuffer[4];
-	ppu.bgTileBuffer[7]=ppu.bgTileBuffer[5];
-	ppu.bgTileBuffer[4]=ppu.bgTileBuffer[2];
-	ppu.bgTileBuffer[5]=ppu.bgTileBuffer[3];
+	ppu.bgTileBuffer[2]=ppu.bgTileBuffer[0];
+	ppu.bgTileBuffer[3]=ppu.bgTileBuffer[1];
 
-	ppu.ntByteBuffer[6]=ppu.ntByteBuffer[4];
-	ppu.ntByteBuffer[7]=ppu.ntByteBuffer[5];
-	ppu.ntByteBuffer[4]=ppu.ntByteBuffer[2];
-	ppu.ntByteBuffer[5]=ppu.ntByteBuffer[3];
-
-	ppu.bgAttributeBuffer[3]=ppu.bgAttributeBuffer[2];
-	ppu.bgAttributeBuffer[2]=ppu.bgAttributeBuffer[1];
-
-	ppu.ntByteBufHelper[3]=ppu.ntByteBufHelper[2];
-	ppu.ntByteBufHelper[2]=ppu.ntByteBufHelper[1];
-
-
+	ppu.bgAttributeBuffer[1]=ppu.bgAttributeBuffer[0];
 
 	//if (ppu.graphicsDebug&&(ppu.cycle<24||ppu.cycle>256))console.log('shiftReg: Cycle, ntByteBuffer', ppu.cycle, ppu.scanline, '-', ppu.ntByteBuffer[0],ppu.ntByteBufHelper[0], '|', ppu.ntByteBuffer[2],ppu.ntByteBufHelper[1], '|', ppu.ntByteBuffer[4],ppu.ntByteBufHelper[2], '|', ppu.ntByteBuffer[6],ppu.ntByteBufHelper[3]);
 
 },
 
-shiftRegisters2:function(){
-ppu.bgTileBuffer[2]=ppu.bgTileBuffer[0];
-ppu.bgTileBuffer[3]=ppu.bgTileBuffer[1];
+updateCurrentTile:function(){
+	ppu.currentTile[2]=ppu.bgTileBuffer[2];
+	ppu.currentTile[3]=ppu.bgTileBuffer[3];
 
-ppu.ntByteBuffer[2]=ppu.ntByteBuffer[0];
-ppu.ntByteBuffer[3]=ppu.ntByteBuffer[1];
+	ppu.currentTile[1]=ppu.bgAttributeBuffer[1];
 
-ppu.bgAttributeBuffer[1]=ppu.bgAttributeBuffer[0];
-
-ppu.ntByteBufHelper[1]=ppu.ntByteBufHelper[0];
-
-
-//if (ppu.graphicsDebug&&(ppu.cycle<24||ppu.cycle>256))console.log('shiftReg2: Cycle, ntByteBuffer', ppu.cycle, ppu.scanline, '-', ppu.ntByteBuffer[0],ppu.ntByteBufHelper[0],  '|', ppu.ntByteBuffer[2],ppu.ntByteBufHelper[1], '|', ppu.ntByteBuffer[4],ppu.ntByteBufHelper[2], '|', ppu.ntByteBuffer[6],ppu.ntByteBufHelper[3]);
+	//if (ppu.graphicsDebug&&(ppu.cycle<24||ppu.cycle>256))console.log('shiftReg2: Cycle, ntByteBuffer', ppu.cycle, ppu.scanline, '-', ppu.ntByteBuffer[0],ppu.ntByteBufHelper[0],  '|', ppu.ntByteBuffer[2],ppu.ntByteBufHelper[1], '|', ppu.ntByteBuffer[4],ppu.ntByteBufHelper[2], '|', ppu.ntByteBuffer[6],ppu.ntByteBufHelper[3]);
 
 },
-
-
 
 fetchSpriteLow:function(){
 
@@ -451,10 +398,7 @@ renderPixel:function(){
 
 	if(ppu.bgEnable){
 
-		if (ppu.graphicsDebug&&ppu.cycle<24&&ppu.scanline===112)console.log('rederpixel:', ppu.cycle, ppu.scroll[0], ppu.fineScrollX, ppu.ntByteBuffer[6], ppu.ntByteBuffer[7], ppu.ntByteBufHelper[3]);
-
-
-
+		//if (ppu.graphicsDebug&&ppu.cycle<24&&ppu.scanline===112){console.log('rederpixel:', ppu.cycle, , ppu.X, ppu.ntByteBuffer[6], ppu.ntByteBuffer[7], ppu.ntByteBufHelper[3]);}
 
 		if((!ppu.bgLeftColumnEnable)&&(ppu.cycle<9)){ //bgLeftColumnDisable
 			var color=bgPal[0][0];
@@ -462,16 +406,17 @@ renderPixel:function(){
 			pixData.data[ppu.canvasOffset+1]=palette[color][1];
 			pixData.data[ppu.canvasOffset+2]=palette[color][2];
 			ppu.canvasOffset+=4;
-			ppu.fineScrollX=(ppu.fineScrollX+1)%8
+			ppu.fineX=(ppu.fineX+1)%8
 		}else{
-		var bgPix=((ppu.bgTileBuffer[6]>>(7-ppu.fineScrollX))&0x01)?1:0;
-		bgPix+=((ppu.bgTileBuffer[7]>>(7-ppu.fineScrollX))&0x01)?2:0;
-		var color=bgPal[ppu.bgAttributeBuffer[3]][bgPix];
+		var bgPix=((ppu.currentTile[2]>>(7-ppu.fineX))&0x01)?1:0;
+		bgPix+=((ppu.currentTile[3]>>(7-ppu.fineX))&0x01)?2:0;
+		var color=bgPal[ppu.currentTile[1]][bgPix];
+    if (color>0x3F){console.log('ppu.renderpixel: color out of range, check bgPal', color  )}
 		pixData.data[ppu.canvasOffset]=palette[color][0];
 		pixData.data[ppu.canvasOffset+1]=palette[color][1];
 		pixData.data[ppu.canvasOffset+2]=palette[color][2];
 		ppu.canvasOffset+=4;
-		ppu.fineScrollX=(ppu.fineScrollX+1)%8
+		ppu.fineX=(ppu.fineX+1)%8
 
 	//Sprite Rendering
 	if(ppu.spriteEnable){
@@ -483,13 +428,15 @@ renderPixel:function(){
 				pix+=((ppu.spriteShiftReg[i][1]>>(7-shift))&0x01)?2:0;
 					if(pix!==0){		//pix!=0 put image data
 						if((ppu.spriteNumBuf[i]===0)&&(bgPix!==0)&&(ppu.cycle!==256)){
-							ppu.registers[2]|=0x40;
+						ppu.registers[2]|=0x40;
 						}
+            if((!(ppu.attributeLatch[i]&0x20))||(bgPix===0)){
 						var color=spritePal[ppu.attributeLatch[i]&0x03][pix];
 						pixData.data[ppu.canvasOffset-4]=palette[color][0];
 						pixData.data[ppu.canvasOffset-3]=palette[color][1];
 						pixData.data[ppu.canvasOffset-2]=palette[color][2];
-					}
+          }
+					  }
 					}
 				}
 			}
@@ -558,7 +505,7 @@ spriteEval:function(){
 					case 1:	//loading and checking each sprite
 						if(!(ppu.cycle%2)){
 							oamBuf[ppu.spritesFound][0]=oam[ppu.oamPtr][0];
-							oamBuf[ppu.spritesFound][5]=ppu.oamPtr;
+							oamBuf[ppu.spritesFound][4]=ppu.oamPtr;
 							if (((ppu.scanline)>=oamBuf[ppu.spritesFound][0])&&((ppu.scanline)<(oamBuf[ppu.spritesFound][0]+(ppu.spriteSize*8)))&&(ppu.scanline<0xEF)){
 								oamBuf[ppu.spritesFound][0]++;
 								ppu.srCase2Mode=2;
@@ -614,7 +561,7 @@ spriteEval:function(){
 
 					case 1:
 						ppu.attributeLatch[ppu.spritesFound]=oamBuf[ppu.spritesFound][2];
-						ppu.spriteNumBuf[ppu.spritesFound]=oamBuf[ppu.spritesFound][5];
+						ppu.spriteNumBuf[ppu.spritesFound]=oamBuf[ppu.spritesFound][4];
 					break;
 
 					case 3:
@@ -652,9 +599,10 @@ readByte: function(addr){
     break;
 
     case 2:
-			var ret=ppu.registers[2];
+			var val=ppu.registers[2];
 			ppu.registers[2]&=0x7F;
-      return ret;
+			ppu.writeToggle=0;
+      return val;
     break;
 
 		case 3:
@@ -666,16 +614,16 @@ readByte: function(addr){
 		break;
 
 		case 5:
-			return ppu.scroll[ppu.xy];
+			return ppu.v&0xFF;
 		break;
 
 		case 6:
-			return ppu.vRamAddr&0xFF;
+			return ppu.v&0xFF;
 		break;
 
 		case 7:
-			return ppu.readVRam(ppu.vRamAddr);
-			 ppu.vRamAddr+=ppu.incrementMode;
+			return ppu.readVRam(ppu.v);
+			 ppu.v+=ppu.incrementMode;
 		break;
 	}
 },
@@ -685,37 +633,17 @@ writeByte: function(addr, data){
 
 		case 0:
 			 ppu.registers[0]=data;
-			 if (data&0x80){ppu.nmiEnable=1;}else{ppu.nmiEnable=0}
-			 if (data&0x40){ppu.m_s=1;}else{ppu.m_s=0}
-			 if (data&0x20){ppu.spriteSize=2;}else{ppu.spriteSize=1}
+			 if (data&0x80){ppu.nmiEnable=1;}else{ppu.nmiEnable=0;}
+			 if (data&0x40){ppu.m_s=1;}else{ppu.m_s=0;}
+			 if (data&0x20){ppu.spriteSize=2;}else{ppu.spriteSize=1;}
 			 ppu.patternTableOffset=(data&0x10)<<8;
 			 ppu.spriteTableOffset=(data&0x08)<<9;
 			 if (data&0x04){ppu.incrementMode=32;}else{ppu.incrementMode=1;}
-			 switch(data&0x03){
-				 case 0:
-				 	ppu.scroll[0]&=0xFF;
-					ppu.scroll[1]&=0xFF;
-				 break;
-
-				 case 1:
-				 	ppu.scroll[0]|=0x100;
-					ppu.scroll[1]&=0xFF;
-				 break;
-
-				 case 2:
-				  ppu.scroll[0]&=0xFF;
-					ppu.scroll[1]|=0x100;
-				 break;
-
-				 case 3:
-				 	ppu.scroll[0]|=0x100;
-					ppu.scroll[1]|=0x100;
-				 break;
-			 }
+	     ppu.t&=0xF3FF;
+       ppu.t|=(data&0x3)<<10;
 		break;
 
 		case 1:
-		//console.log(data.toString(2));
 			ppu.registers[1]=data;
 			ppu.bgr=(data>>5)
 			ppu.spriteEnable=(data&0x10)?1:0;
@@ -726,7 +654,7 @@ writeByte: function(addr, data){
 		break;
 
 		case 2:
-
+      //do nothing
 		break;
 
 		case 3:
@@ -738,20 +666,35 @@ writeByte: function(addr, data){
 		break;
 
 		case 5:
-			 ppu.scroll[ppu.xy]&=0x100;
-			 ppu.scroll[ppu.xy]|=data;
-			 ppu.xy=(ppu.xy+1)&0x1
+		  if(!ppu.writeToggle){
+			  ppu.fineX=data&0x07;
+        ppu.t&=0xFFE0;
+		    ppu.t|=data>>3;
+        ppu.writeToggle=1;
+		  }else{
+        ppu.t&=0x0C1F;
+			  ppu.t|=((data&0x07)<<12);
+			  ppu.t|=((data&0xF8)<<2);
+        ppu.writeToggle=0;
+		  }
 		break;
 
 		case 6:
-			 ppu.vRamAddr<<=8;
-			 ppu.vRamAddr|=data;
-			 ppu.vRamAddr&=0xFFFF;
+		 if(!ppu.writeToggle){
+			 ppu.t&=0x00FF;
+       ppu.t|=((data&0x3F)<<8);
+       ppu.writeToggle=1;
+		 }else{
+       ppu.t&=0xFF00;
+       ppu.t|=data;
+       ppu.v=ppu.t;
+       ppu.writeToggle=0;
+		 }
 		break;
 
 		case 7:
-			 ppu.writeVRam(ppu.vRamAddr, data);
-			 ppu.vRamAddr+=ppu.incrementMode;
+			 ppu.writeVRam(ppu.v, data);
+			 ppu.v+=ppu.incrementMode;
 		break;
 	}
 },
@@ -768,57 +711,9 @@ readVRam:function(addr){
 		break;
 
 		case 0x2000:
-
-			switch(addr&0xF00){
-
-				case 0x000:
-				case 0x100:
-				case 0x200:
-				case 0x300:
-					return nameTable[0][addr-0x2000];
-				break;
-
-				case 0x400:
-				case 0x500:
-				case 0x600:
-				case 0x700:
-				switch(ppu.nametableMirroring){
-
-				case 2:
-				return nameTable[1][addr-0x2400];
-				break
-
-				case 3:
-				return nameTable[1][addr-0x2400];
-				break;
-			}
-				break;
-
-				case 0x800:
-				case 0x900:
-				case 0xA00:
-				case 0xB00:
-					switch(ppu.nametableMirroring){
-
-					case 0:
-					return nameTable[1][addr-0x2800];
-					break
-
-					case 1:
-					return nameTable[0][addr-0x2800];
-					break;
-				}
-				break;
-
-				case 0xC00:
-				case 0xD00:
-				case 0xE00:
-				case 0xF00:
-					return nameTable[1][addr-0x2C00];
-				break;
-
-			}
-
+    var nt=(addr>>10)&0x3
+    var offset=addr&0x3FF
+    return nameTable[nt][offset];
 		break;
 
 		case 0x3000:
@@ -897,56 +792,9 @@ writeVRam:function(addr, data){
 
 			case 0x2000:
 
-				switch(addr&0xF00){
-
-					case 0x000:
-					case 0x100:
-					case 0x200:
-					case 0x300:
-						nameTable[0][addr-0x2000]=data;
-					break;
-
-					case 0x400:
-					case 0x500:
-					case 0x600:
-					case 0x700:
-					switch(ppu.nametableMirroring){
-
-					case 2:
-					 nameTable[1][addr-0x2400]=data;
-					break;
-
-					case 3:
-					 nameTable[1][addr-0x2400]=data;
-					break;
-				}
-					break;
-
-					case 0x800:
-					case 0x900:
-					case 0xA00:
-					case 0xB00:
-						switch(ppu.nametableMirroring){
-
-						case 2:
-						 nameTable[1][addr-0x2800]=data;
-						break;
-
-						case 3:
-						 nameTable[0][addr-0x2800]=data;
-						break;
-					}
-					break;
-
-					case 0xC00:
-					case 0xD00:
-					case 0xE00:
-					case 0xF00:
-						nameTable[1][addr-0x2C00]=data;
-					break;
-
-				}
-
+      var nt=(addr>>10)&0x3
+      var offset=addr&0x3FF
+      nameTable[nt][offset]=data;
 			break;
 
 			case 0x3000:
@@ -1030,9 +878,10 @@ oamDMA:function(addr){
 
 showState:function(){
 	console.log('ppu state:');
-	console.log('mode:', ppu.mode);
+	console.log('mode:', ppu.cycleMode);
 	console.log('cycle:', ppu.cycle);
 	console.log('scanline:', ppu.scanline);
+
 
 
 },

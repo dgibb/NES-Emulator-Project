@@ -54,50 +54,6 @@ cpu.pc+=2;
 cpu.clk=8;
 },
 
-ILL:function(){
-console.log('illegal opcode', memory.readByte(cpu.pc).toString(16), 'at', cpu.pc.toString(16));
-
-console.log(memory.readByte(cpu.pcPrev).toString(16));
-
-	switch(memory.readByte(cpu.pc)%0x20){
-
-		case 0x3:
-		cpu.pc+=2;
-		break;
-
-		case 0x7:
-		cpu.pc+=2;
-		break;
-
-		case 0xB:
-		cpu.pc+=2;
-		break;
-
-		case 0xF:
-		cpu.pc+=3;
-		break;
-
-		case 0x13:
-		cpu.pc+=2;
-		break;
-
-		case 0x17:
-		cpu.pc+=2;
-		break;
-
-		case 0x1B:
-		cpu.pc+=3;
-		break;
-
-		case 0x1F:
-		cpu.pc+=3;
-		break;
-
-		default:
-		console.log('you screwed up fam, not an illegal opcode');
-		break;
-}
-},
 
 //0x04
 NOP:function(){
@@ -224,11 +180,12 @@ cpu.clk=6;
 
 //0x10
 BPL: function(){
+  cpu.clk=2;
 	if(!cpu.negativeFlag()){
 		cpu.pc+=cpu.signDecode(memory.readByte(cpu.pc+1));
+    cpu.clk++;
 	}
 	cpu.pc+=2;
-	cpu.clk=3;
 },
 
 //0x11
@@ -347,7 +304,7 @@ ASL_ABX:function(){
 	if(val>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 	if(val===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 	cpu.pc+=3;
-	cpu.clk=6;
+	cpu.clk=7;
 },
 
 //0x1F:SLO/ILL
@@ -537,11 +494,12 @@ cpu.clk=6;
 
 //0x30
 BMI: function(){
+  cpu.clk=2;
 	if(cpu.negativeFlag()){
 		cpu.pc+=cpu.signDecode(memory.readByte(cpu.pc+1));
+    cpu.clk++
 	}
 	cpu.pc+=2;
-	cpu.clk=3;
 },
 
 //0x31
@@ -580,7 +538,7 @@ cpu.a&= memory.readByte(addr);
 if(cpu.a>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 if(cpu.a===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 cpu.pc+=2;
-cpu.clk=6;
+cpu.clk=4;
 },
 
 //0x36
@@ -672,7 +630,7 @@ ROL_ABX:function(){
 	if(val>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 	if(val===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 	cpu.pc+=3;
-	cpu.clk=6;
+	cpu.clk=7;
 },
 
 //0x3F:RLA/ILL *illegal*
@@ -893,7 +851,7 @@ cpu.a^= memory.readByte(addr);
 if(cpu.a>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 if(cpu.a===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 cpu.pc+=2;
-cpu.clk=6;
+cpu.clk=4;
 },
 
 //0x56
@@ -976,7 +934,7 @@ LSR_ABX:function(){
 	cpu.resetNegativeFlag();
 	if(val===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 	cpu.pc+=3;
-	cpu.clk=6;
+	cpu.clk=7;
 },
 
 //0x5F *illegal*
@@ -1140,7 +1098,7 @@ JMP_I: function(){
 	var jump=memory.readWord(addr)
 	if ((addr&0xFF)===0xFF){jump&=0xFF; jump|=(memory.readByte(addr-0xFF)<<8);}
 	cpu.pc=jump;
-	cpu.clk=3;
+	cpu.clk=5;
 },
 
 //0x6D
@@ -1194,11 +1152,12 @@ RRA_AB: function(){
 
 //0x70
 BVS: function(){
+  cpu.clk=2;
 	if(cpu.overflowFlag()){
 		cpu.pc+=cpu.signDecode(memory.readByte(cpu.pc+1));
+    cpu.clk+=1;
 	}
 	cpu.pc+=2;
-	cpu.clk=3;
 },
 
 //0x71
@@ -1283,7 +1242,7 @@ RRA_ZPX: function(){
   if(cpu.a>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
   if(cpu.a===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
   cpu.pc+=2;
-  cpu.clk=8;
+  cpu.clk=6;
 },
 
 //0x78
@@ -1402,21 +1361,21 @@ cpu.clk=6;
 STY_ZP:function(){
 memory.writeByte(memory.readByte(cpu.pc+1), cpu.y);
 cpu.pc+=2;
-cpu.clk=3;
+cpu.clk=4;
 },
 
 //0x85
 STA_ZP:function(){
 memory.writeByte(memory.readByte(cpu.pc+1), cpu.a);
 cpu.pc+=2;
-cpu.clk=3;
+cpu.clk=4;
 },
 
 //0x86
 STX_ZP:function(){
 memory.writeByte(memory.readByte(cpu.pc+1), cpu.x);
 cpu.pc+=2;
-cpu.clk=3;
+cpu.clk=4;
 },
 
 //0x87 *illegal*
@@ -1495,11 +1454,12 @@ SAX_AB:function(){
 
 //0x90
 BCC: function(){
+  cpu.clk=2;
 	if(!cpu.carryFlag()){
 		cpu.pc+=cpu.signDecode(memory.readByte(cpu.pc+1));
+    cpu.clk+=1;
 	}
 	cpu.pc+=2;
-	cpu.clk=3;
 },
 
 //0x91
@@ -1507,7 +1467,7 @@ STA_IY:function(){
   var addr = memory.readWord(memory.readByte(cpu.pc+1))+cpu.y;
   memory.writeByte(addr, cpu.a);
   cpu.pc+=2;
-  cpu.clk=4;
+  cpu.clk=6;
 },
 
 //0x92:HLT
@@ -1772,16 +1732,17 @@ cpu.x=memory.readByte(addr);
 if(cpu.x>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 if(cpu.x===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 cpu.pc+=3;
-cpu.clk=6;
+cpu.clk=4;
 },
 
 //0xB0
 BCS: function(){
+  cpu.clk=2;
 	if(cpu.carryFlag()){
 		cpu.pc+=cpu.signDecode(memory.readByte(cpu.pc+1));
+    cpu.clk+=1;
 	}
 	cpu.pc+=2;
-	cpu.clk=3;
 },
 
 //0xB1
@@ -1996,7 +1957,7 @@ memory.writeByte(addr, val);
 if(val>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 if(val===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 cpu.pc+=2;
-cpu.clk=3;
+cpu.clk=5;
 },
 
 //0xC7 *illegal*
@@ -2170,7 +2131,7 @@ DCP_ZPX:function(){
   if(cpu.a>=val){cpu.setCarryFlag();}else{cpu.resetCarryFlag();}
   if(cpu.a===val){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 	cpu.pc+=2;
-	cpu.clk=8;
+	cpu.clk=6;
 },
 
 //0xD8
@@ -2226,7 +2187,7 @@ memory.writeByte(addr, val);
 if(val>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 if(val===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 cpu.pc+=3;
-cpu.clk=6;
+cpu.clk=7;
 },
 
 //0xDF *illegal*
@@ -2376,7 +2337,7 @@ CPX_AB:function(){
 	if(cpu.x>=val){cpu.setCarryFlag();}else{cpu.resetCarryFlag();}
 	if(cpu.x===val){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 	cpu.pc+=3;
-	cpu.clk=3;
+	cpu.clk=4;
 },
 
 //0xED
@@ -2421,17 +2382,18 @@ ISC_AB:function(){
   if(cpu.a>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
   if(cpu.a===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
   cpu.pc+=3;
-  cpu.clk=8;
+  cpu.clk=6;
 },
 
 
 //0xF0
 BEQ:function(){
+  cpu.clk=2;
 	if(cpu.zeroFlag()){
 		cpu.pc+=cpu.signDecode(memory.readByte(cpu.pc+1));
+    cpu.clk+=1;
 	}
 	cpu.pc+=2;
-	cpu.clk=3;
 },
 
 //0xF1
@@ -2511,7 +2473,7 @@ ISC_ZPX:function(){
   if(cpu.a>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
   if(cpu.a===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
   cpu.pc+=2;
-  cpu.clk=8;
+  cpu.clk=6;
 },
 
 
@@ -2582,7 +2544,7 @@ memory.writeByte(addr, val);
 if(val>0x7F){cpu.setNegativeFlag();}else{cpu.resetNegativeFlag();}
 if(val===0){cpu.setZeroFlag();}else{cpu.resetZeroFlag();}
 cpu.pc+=3;
-cpu.clk=6;
+cpu.clk=7;
 },
 
 //0xFF *illegal*
@@ -2602,10 +2564,6 @@ ISC_ABX:function(){
   cpu.pc+=3;
   cpu.clk=7;
 },
-
-
-
-
 
 //flag setting functions
 
