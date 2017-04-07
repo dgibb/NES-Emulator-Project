@@ -2706,6 +2706,7 @@ ex:function(opcode){
 	for(var i=0; i<3*cpu.clk;i++){
 		ppu.step();
     ppu.spriteEval();
+    memory.mapper.step();
 	}
   input.step();
 },

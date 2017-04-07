@@ -151,10 +151,7 @@ var mapper0={
     ppu.patternTableOffset=0x0000;
   },
 
-  irqStep:function(){
-    //if (){}
-
-
+  step:function(){
   }
 
 };
@@ -470,6 +467,7 @@ var mapper4={
 
   //irq
   irqCounter:0,
+  lastEdge:0,
 
 
   readByte: function(addr){
@@ -540,8 +538,12 @@ var mapper4={
     case 0x9000:
 
         if(!(addr%2)){
+          if(mapper4.chrRomBankMode!==((data&0x80)>>7)){
           mapper4.setChrBankMode((data&0x80)>>7);
+          }
+          if(mapper4.prgRomBankMode!==((data&0x40)>>6)){
           mapper4.setRomBankMode((data&0x40)>>6);
+          }
           mapper4.bankSelect=data&0x07;
         }else{
           switch(mapper4.bankSelect){
@@ -581,7 +583,7 @@ var mapper4={
             if (!mapper4.chrRomBankMode){
               mapper4.chrBankOffset[5]=(data)*0x400;
             }else{
-              mapper4.chrBankOffset[1]=(data)*0x400;
+             mapper4.chrBankOffset[1]=(data)*0x400;
             }
             break;
 
@@ -642,6 +644,7 @@ var mapper4={
     mapper4.irqLatch=data;
     }else{
     mapper4.irqReloadRequest=1;
+    mapper4.irqCounter=0;
     }
     break;
 
@@ -876,10 +879,10 @@ var mapper4={
     mapper4.chrBankOffset[1]=(mapper4.bankRegister[0]|0x01)*0x400;
     mapper4.chrBankOffset[2]=(mapper4.bankRegister[1]&0xFE)*0x400;
     mapper4.chrBankOffset[3]=(mapper4.bankRegister[1]|0x01)*0x400;
-    mapper4.chrBankOffset[4]=(mapper4.bankRegister[2]&0xFE)*0x400;
-    mapper4.chrBankOffset[5]=(mapper4.bankRegister[3]|0x01)*0x400;
-    mapper4.chrBankOffset[6]=(mapper4.bankRegister[4]&0xFE)*0x400;
-    mapper4.chrBankOffset[7]=(mapper4.bankRegister[5]|0x01)*0x400;
+    mapper4.chrBankOffset[4]=mapper4.bankRegister[2]*0x400;
+    mapper4.chrBankOffset[5]=mapper4.bankRegister[3]*0x400;
+    mapper4.chrBankOffset[6]=mapper4.bankRegister[4]*0x400;
+    mapper4.chrBankOffset[7]=mapper4.bankRegister[5]*0x400;
     break;
 
     case 1:
@@ -887,10 +890,10 @@ var mapper4={
     mapper4.chrBankOffset[5]=(mapper4.bankRegister[0]|0x01)*0x400;
     mapper4.chrBankOffset[6]=(mapper4.bankRegister[1]&0xFE)*0x400;
     mapper4.chrBankOffset[7]=(mapper4.bankRegister[1]|0x01)*0x400;
-    mapper4.chrBankOffset[0]=(mapper4.bankRegister[2]&0xFE)*0x400;
-    mapper4.chrBankOffset[1]=(mapper4.bankRegister[3]|0x01)*0x400;
-    mapper4.chrBankOffset[2]=(mapper4.bankRegister[4]&0xFE)*0x400;
-    mapper4.chrBankOffset[3]=(mapper4.bankRegister[5]|0x01)*0x400;
+    mapper4.chrBankOffset[0]=mapper4.bankRegister[2]*0x400;
+    mapper4.chrBankOffset[1]=mapper4.bankRegister[3]*0x400;
+    mapper4.chrBankOffset[2]=mapper4.bankRegister[4]*0x400;
+    mapper4.chrBankOffset[3]=mapper4.bankRegister[5]*0x400;
     break;
 
     default:
@@ -914,23 +917,28 @@ var mapper4={
     mapper4.prgRam= new Array(0x2000);
   },
 
-  irqStep:function(){
+  step:function(){
 
-    if ((mapper4.irqCounter===0)&&(mapper4.irqEnable)){
-      memory.writeWord((cpu.sp|0x100)-1, cpu.pc+2);
-			cpu.sp=(cpu.sp-2)&0xFF;
-			memory.writeByte(cpu.sp|0x100, cpu.sr|0x30);
-			cpu.sp=(cpu.sp-1)&0xFF;
-			cpu.pc=memory.readWord(memory.irqVector);
-    }
+    if (ppu.a12){
 
-    if(mapper4.irqReloadRequest){
-      mapper4.irqCounter=mapper4.irqLatch;
-      mapper4.irqReloadRequest=0;
-    }
-
-    if (ppu.cycle===260){
       mapper4.irqCounter--;
+      ppu.a12=0;
+
+      if(mapper4.irqReloadRequest){
+        mapper4.irqCounter=mapper4.irqLatch;
+        mapper4.irqReloadRequest=0;
+      }
+
+      if ((mapper4.irqCounter===-1)&&(mapper4.irqEnable)){
+        memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
+        cpu.sp=(cpu.sp-2)&0xFF;
+        memory.writeByte(cpu.sp|0x100, cpu.sr|0x20);
+        cpu.sp=(cpu.sp-1)&0xFF;
+        cpu.pc=memory.readWord(memory.irqVector);
+        mapper4.irqCounter=mapper4.irqLatch;
+        //cpu.setInterruptFlag();
+        //console.log('MMC3 irq taken');
+      }
     }
   },
 

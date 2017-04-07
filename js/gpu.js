@@ -67,6 +67,8 @@ cycle:0,
 cycleMode:0,
 scanlineMode:3,		//0: visible scanline, 1: vBlank:, 2: post-render line (241) 3:pre-render line(261)
 
+a12:0,
+
 //bg rendering
 
 step:function(){
@@ -80,7 +82,7 @@ step:function(){
 					ppu.cycleMode=1;
 				break;
 
-		case 1:	//ppu.cycleMode: pixel rendering phase
+		      case 1:	//ppu.cycleMode: pixel rendering phase
 
         if(ppu.fineX===0){ppu.updateCurrentTile();}
 
@@ -129,7 +131,7 @@ step:function(){
               var y=(ppu.v&0x03E0)>>5;
               if (y===29){
                 y=0;
-                if(ppu.nametableMirroring===2&&ppu.scanline<239){
+                if(ppu.scanline<239&&(ppu.nametableMirroring===2)){
                 ppu.v^=0x0800;
               }
               }else{
@@ -149,6 +151,7 @@ step:function(){
             ppu.v&=0xFBE0;
             ppu.v|=(ppu.t&0x041F);
             }
+            ppu.a12=1;
 					}
 
 					switch (ppu.cycle&0x7){
@@ -231,7 +234,7 @@ step:function(){
 					if (ppu.nmiEnable){
 						memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
 						cpu.sp-=2;
-						memory.writeByte(cpu.sp|0x100, cpu.sr|0x30);
+						memory.writeByte(cpu.sp|0x100, cpu.sr|0x20);
 						cpu.sp-=1;
 						cpu.pc=memory.readWord(memory.nmiVector);
 					}
@@ -690,11 +693,14 @@ writeByte: function(addr, data){
        ppu.v=ppu.t;
        ppu.writeToggle=0;
 		 }
+       ppu.a12=1;
 		break;
 
 		case 7:
 			 ppu.writeVRam(ppu.v, data);
 			 ppu.v+=ppu.incrementMode;
+         ppu.a12=1;
+
 		break;
 	}
 },
