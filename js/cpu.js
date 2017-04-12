@@ -2700,15 +2700,17 @@ negativeFlag:function(){
 ex:function(opcode){
 	cpu.pcPrev=cpu.pc;
 	instructionMap[opcode]();
-	//if (cpu.pcPrev===0x3A0){console.log(instructionMap[memory.readByte(cpu.pcPrev)].name, cpu.toHex2(cpu.a),   cpu.toHex2(cpu.x),  cpu.toHex2(cpu.y), cpu.toHex2(cpu.sr));}
 	cpu.cycle+=cpu.clk;
-  //debug.callStack[debug.callStack.length-1][1]+=cpu.clk;
 	for(var i=0; i<3*cpu.clk;i++){
 		ppu.step();
+    if (memory.mapper.interrupts){memory.mapper.step();}
     ppu.spriteEval();
-    memory.mapper.step();
 	}
   input.step();
+  if (ppu.vblDelay){ppu.vblDelay=0;ppu.nmiEnable=1;}
+  if(ppu.queuedIntCycles){
+    ppu.runIntCycles();
+  }
 },
 
 reset:function(){

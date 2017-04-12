@@ -60,6 +60,11 @@ spriteTileOffset:0,
 nametableMirroring:0, //see mirroring table at bottom
 graphicsDebug:0,
 spriteNumBuf:[0,0,0,0,0,0,0,0],
+evenOddToggle:0,
+nmiSuppress:0,
+vblTaken:0,
+queuedIntCycles:0,
+readBuffer:0,
 
 //FSM
 scanline:261,
@@ -80,6 +85,7 @@ step:function(){
 
 				case 0:	//ppu.cycleMode: idle cycle
 					ppu.cycleMode=1;
+          ppu.updateCurrentTile();
 				break;
 
 		      case 1:	//ppu.cycleMode: pixel rendering phase
@@ -187,6 +193,7 @@ step:function(){
             break;
 
 						case 1:
+              ppu.shiftRegisters();
 							ppu.fetchNTByte();
 						break;
 
@@ -218,28 +225,51 @@ step:function(){
 		break;
 
 		case 1:	//ppu.scanlinemode: Vblank
-				if (ppu.cycle===340){
-					if (ppu.scanline===240){ppu.scanlineMode=2;}
-					else if (ppu.scanline===260){ppu.scanlineMode=3;}
-			 		ppu.cycleMode=0;
-			 		ppu.cycle=-1;
-			 		ppu.scanline=(ppu.scanline+1)%262;
-		 		}
+
+    if ((ppu.registers[2]&0x80)&&ppu.nmiEnable&&(!ppu.vblTaken)){
+      memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
+      cpu.sp-=2;
+      memory.writeByte(cpu.sp|0x100, cpu.sr|0x20);
+      cpu.sp-=1;
+      cpu.pc=memory.readWord(memory.nmiVector);
+      cpu.setInterruptFlag();
+      ppu.vblTaken=1;
+      ppu.queuedIntCycles=21;
+      //console.log('VBL_NMI: cycle', ppu.cycle, 'scanline', ppu.scanline, 'instance 1');
+    }
+
+		if (ppu.cycle===340){
+			if (ppu.scanline===240){ppu.scanlineMode=2;}
+			else if (ppu.scanline===260){ppu.scanlineMode=3;}
+			ppu.cycleMode=0;
+			ppu.cycle=-1;
+			ppu.scanline=(ppu.scanline+1)%262;
+		}
 		break;
 
 		case 2: //ppu.scanlinemode: post-render line(241)
 
 				if (ppu.cycle===1){
-					ppu.setVBlankFlag();
-					if (ppu.nmiEnable){
-						memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
-						cpu.sp-=2;
-						memory.writeByte(cpu.sp|0x100, cpu.sr|0x20);
-						cpu.sp-=1;
-						cpu.pc=memory.readWord(memory.nmiVector);
-					}
+          if(!ppu.nmiSuppress){
+					  ppu.setVBlankFlag();
+          }
 					screen.putImageData(pixData,0,0);
-				}
+        }
+
+        if ((ppu.registers[2]&0x80)&&ppu.nmiEnable&&(!ppu.vblTaken)){
+          memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
+          cpu.sp-=2;
+          memory.writeByte(cpu.sp|0x100, cpu.sr|0x20);
+          cpu.sp-=1;
+          cpu.pc=memory.readWord(memory.nmiVector);
+          cpu.setInterruptFlag();
+          ppu.vblTaken=1;
+          ppu.queuedIntCycles=21;
+          //console.log('VBL_NMI: cycle', ppu.cycle, 'scanline', ppu.scanline, 'instance 2');
+        }
+
+        if(ppu.cycle<=10&&ppu.graphicsDebug){console.log(ppu.scanline, ppu.cycle, ppu.registers[2].toString(16), ppu.nmiEnable, ppu.vblTaken)}
+
 				if (ppu.cycle===340){
 					ppu.scanlineMode=1;
 					ppu.cycleMode=1;
@@ -250,9 +280,25 @@ step:function(){
 
 		case 3:	//ppu.scanlinemode: pre-render line (261)
 
+      if(ppu.cycle===0){
+        if ((ppu.registers[2]&0x80)&&ppu.nmiEnable&&(!ppu.vblTaken)){
+          memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
+          cpu.sp-=2;
+          memory.writeByte(cpu.sp|0x100, cpu.sr|0x20);
+          cpu.sp-=1;
+          cpu.pc=memory.readWord(memory.nmiVector);
+          cpu.setInterruptFlag();
+          ppu.vblTaken=1;
+          ppu.queuedIntCycles=21;
+          //console.log('VBL_NMI: cycle', ppu.cycle, 'scanline', ppu.scanline, 'instance 3');
+        }
+      }
+
 			if (ppu.cycle===1){
 				ppu.registers[2]&=0x1F;
 				ppu.canvasOffset=0;
+        ppu.vblTaken=0;
+        ppu.nmiSuppress=0;
 			}
 
       if (ppu.cycle>=280&&ppu.cycle<=304){  //copies ppu.t vertical data to ppu.v
@@ -304,6 +350,11 @@ step:function(){
 				ppu.cycleMode=0
 				ppu.cycle=-1;
 				ppu.scanline=(ppu.scanline+1)%262;
+        if(ppu.evenOddToggle){
+          ppu.cycleMode=1;
+          ppu.cycle++;
+        }
+        ppu.evenOddToggle=(ppu.evenOddToggle+1)&0x01;
 			}
 		break;
 	}
@@ -317,7 +368,9 @@ fetchNTByte:function(){					//actually fetches patternTable address;
   var nt=(ppu.v>>10)&0x3
   var address = (ppu.v&0xFFF)+0x2000
 	ppu.nametableByte=ppu.readVRam(address);//nametable Byte
-  if (ppu.graphicsDebug&&((ppu.v>>12)===0)){console.log(ppu.scanline, ppu.cycle, '-', ppu.nametableByte.toString(16), x.toString(16), y.toString(16), nt.toString(16))}
+  ppu.ntByteBuffer[0]=ppu.nametableByte;
+  ppu.ntByteBufHelper[0]=ppu.cycle
+//  if (ppu.graphicsDebug&&ppu.scanline===124){console.log(ppu.nametableByte.toString(16), ppu.cycle)}
 	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset+(ppu.v>>12);//tile pattern address
 },
 
@@ -345,6 +398,10 @@ shiftRegisters:function(){
 
 	ppu.bgAttributeBuffer[1]=ppu.bgAttributeBuffer[0];
 
+  ppu.ntByteBuffer[1]=ppu.ntByteBuffer[0];
+
+  ppu.ntByteBufHelper[1]=ppu.ntByteBufHelper[0];
+
 	//if (ppu.graphicsDebug&&(ppu.cycle<24||ppu.cycle>256))console.log('shiftReg: Cycle, ntByteBuffer', ppu.cycle, ppu.scanline, '-', ppu.ntByteBuffer[0],ppu.ntByteBufHelper[0], '|', ppu.ntByteBuffer[2],ppu.ntByteBufHelper[1], '|', ppu.ntByteBuffer[4],ppu.ntByteBufHelper[2], '|', ppu.ntByteBuffer[6],ppu.ntByteBufHelper[3]);
 
 },
@@ -355,7 +412,10 @@ updateCurrentTile:function(){
 
 	ppu.currentTile[1]=ppu.bgAttributeBuffer[1];
 
-	//if (ppu.graphicsDebug&&(ppu.cycle<24||ppu.cycle>256))console.log('shiftReg2: Cycle, ntByteBuffer', ppu.cycle, ppu.scanline, '-', ppu.ntByteBuffer[0],ppu.ntByteBufHelper[0],  '|', ppu.ntByteBuffer[2],ppu.ntByteBufHelper[1], '|', ppu.ntByteBuffer[4],ppu.ntByteBufHelper[2], '|', ppu.ntByteBuffer[6],ppu.ntByteBufHelper[3]);
+  ppu.currentTile[0]=ppu.ntByteBuffer[1]
+  ppu.currentTile[4]=ppu.ntByteBufHelper[1]
+
+	//if (ppu.graphicsDebug&&ppu.cycle===0){console.log('updateCurrentTile:', ppu.ntByteBuffer[0], ppu.ntByteBuffer[1], ppu.ntByteBufHelper[0], ppu.ntByteBufHelper[1]);}
 
 },
 
@@ -404,6 +464,7 @@ renderPixel:function(){
 		//if (ppu.graphicsDebug&&ppu.cycle<24&&ppu.scanline===112){console.log('rederpixel:', ppu.cycle, , ppu.X, ppu.ntByteBuffer[6], ppu.ntByteBuffer[7], ppu.ntByteBufHelper[3]);}
 
 		if((!ppu.bgLeftColumnEnable)&&(ppu.cycle<9)){ //bgLeftColumnDisable
+  //    console.log('renderpixel: left column disabled', ppu.bgLeftColumnEnable)
 			var color=bgPal[0][0];
 			pixData.data[ppu.canvasOffset]=palette[color][0];
 			pixData.data[ppu.canvasOffset+1]=palette[color][1];
@@ -413,7 +474,9 @@ renderPixel:function(){
 		}else{
 		var bgPix=((ppu.currentTile[2]>>(7-ppu.fineX))&0x01)?1:0;
 		bgPix+=((ppu.currentTile[3]>>(7-ppu.fineX))&0x01)?2:0;
-		var color=bgPal[ppu.currentTile[1]][bgPix];
+    var pal =ppu.currentTile[1];
+    if(bgPix===0){pal=0;}
+		var color=bgPal[pal][bgPix];
     if (color>0x3F){console.log('ppu.renderpixel: color out of range, check bgPal', color  )}
 		pixData.data[ppu.canvasOffset]=palette[color][0];
 		pixData.data[ppu.canvasOffset+1]=palette[color][1];
@@ -421,19 +484,25 @@ renderPixel:function(){
 		ppu.canvasOffset+=4;
 		ppu.fineX=(ppu.fineX+1)%8
 
+  //  if((ppu.cycle<9)&&(bgPix!==0)){console.log('CYCLE<9, BGPIX!==0', ppu.scanline)}
+
 	//Sprite Rendering
 	if(ppu.spriteEnable){
-		if(!((!ppu.spriteLeftColumnEnable)&&(ppu.cycle<9))){
+		if(!((!ppu.registers[1]&0x6)&&(ppu.cycle<9))){
 		for(var i=7;i>=0;i--){
 			if((((ppu.cycle-1)>=ppu.spriteX[i]&&(ppu.cycle-1)<(ppu.spriteX[i]+8)))&&ppu.spriteX[i]<0xFF){//x coord is in range
 				var shift=(ppu.cycle-1)-ppu.spriteX[i];
 				var pix=((ppu.spriteShiftReg[i][0]>>(7-shift))&0x01)?1:0;
 				pix+=((ppu.spriteShiftReg[i][1]>>(7-shift))&0x01)?2:0;
 					if(pix!==0){		//pix!=0 put image data
-						if((ppu.spriteNumBuf[i]===0)&&(bgPix!==0)&&(ppu.cycle!==256)){
-						ppu.registers[2]|=0x40;
+						if((ppu.spriteNumBuf[i]===0)&&(bgPix!==0)&&(ppu.cycle!==256)&&(!(ppu.registers[2]&0x40))){
+              if(!(!ppu.spriteLeftColumnEnable&&ppu.cycle<9)){
+						   ppu.registers[2]|=0x40;
+            //  console.log('spriteHit', ppu.scanline, ppu.cycle-1 )
+              }
 						}
             if((!(ppu.attributeLatch[i]&0x20))||(bgPix===0)){
+          //  console.log('drawing pixel', ppu.bgLeftColumnEnable, ppu.scanline, ppu.cycle-1, bgPix, ppu.currentTile[0], ppu.currentTile[2], ppu.currentTile[3], ppu.currentTile[4]);
 						var color=spritePal[ppu.attributeLatch[i]&0x03][pix];
 						pixData.data[ppu.canvasOffset-4]=palette[color][0];
 						pixData.data[ppu.canvasOffset-3]=palette[color][1];
@@ -455,6 +524,14 @@ renderPixel:function(){
 
 setVBlankFlag:function(){
 	ppu.registers[2]|=0x80;
+},
+
+runIntCycles:function(){
+  for(ppu.queuedIntCycles; ppu.queuedIntCycles>0;ppu.queuedIntCycles--){
+    ppu.step();
+    //console.log('ppu.runintcycles:', ppu.queuedIntCycles);
+  }
+    //console.log('ran int cycles')
 },
 
 xFlip:function(byte){
@@ -605,6 +682,7 @@ readByte: function(addr){
 			var val=ppu.registers[2];
 			ppu.registers[2]&=0x7F;
 			ppu.writeToggle=0;
+      //if(ppu.scanline===241&&ppu.cycle===1){ppu.nmiSuppress=1; console.log('nmi-supress')}
       return val;
     break;
 
@@ -625,8 +703,10 @@ readByte: function(addr){
 		break;
 
 		case 7:
-			return ppu.readVRam(ppu.v);
+			var val=ppu.readBuffer;
+      ppu.readBuffer=ppu.readVRam(ppu.v);
 			 ppu.v+=ppu.incrementMode;
+       return val;
 		break;
 	}
 },
@@ -636,7 +716,8 @@ writeByte: function(addr, data){
 
 		case 0:
 			 ppu.registers[0]=data;
-			 if (data&0x80){ppu.nmiEnable=1;}else{ppu.nmiEnable=0;}
+			 if (data&0x80){ppu.vblDelay=1;}else{ppu.nmiEnable=0;ppu.vblDelay=0;}
+       if ((!(data&0x80))&&ppu.vblTaken){ppu.vblTaken=0;}
 			 if (data&0x40){ppu.m_s=1;}else{ppu.m_s=0;}
 			 if (data&0x20){ppu.spriteSize=2;}else{ppu.spriteSize=1;}
 			 ppu.patternTableOffset=(data&0x10)<<8;
@@ -652,12 +733,12 @@ writeByte: function(addr, data){
 			ppu.spriteEnable=(data&0x10)?1:0;
 			ppu.bgEnable=(data&0x08)?1:0;
 			ppu.spriteLeftColumnEnable=(data&0x04)?1:0;
-			ppu.bgLeftColumnEnable=(data&0x02)?1:0;
+			ppu.bgLeftColumnEnable=(data&0x02)>>1;
 			ppu.greyScale=data&0x01;
 		break;
 
 		case 2:
-      //do nothing
+      ppu.registers[2]=data;
 		break;
 
 		case 3:
@@ -875,10 +956,11 @@ oamDMA:function(addr){
 	addr<<=8;
 	for (var i=0;i<0x100;i++){
 		oam[Math.floor(i/4)][i%4]=memory.readByte(addr+i);
+    for (var j=0;j<6;j++){
 		ppu.step();
+    memory.mapper.step();
 		ppu.spriteEval();
-		ppu.step();
-		ppu.spriteEval();
+    }
 	}
 },
 

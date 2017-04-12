@@ -3,6 +3,7 @@
 var mapper0={
 
  unused:0,
+ interrupts:0,
 
   readByte: function(addr){
 
@@ -468,6 +469,8 @@ var mapper4={
   //irq
   irqCounter:0,
   lastEdge:0,
+  intCycles:0,
+  interrupts:1,
 
 
   readByte: function(addr){
@@ -929,14 +932,15 @@ var mapper4={
         mapper4.irqReloadRequest=0;
       }
 
-      if ((mapper4.irqCounter===-1)&&(mapper4.irqEnable)){
+      if ((mapper4.irqCounter===-1)&&(mapper4.irqEnable)&&(!(cpu.interruptFlag()))){
         memory.writeWord((cpu.sp|0x100)-1, cpu.pc);
         cpu.sp=(cpu.sp-2)&0xFF;
         memory.writeByte(cpu.sp|0x100, cpu.sr|0x20);
         cpu.sp=(cpu.sp-1)&0xFF;
         cpu.pc=memory.readWord(memory.irqVector);
         mapper4.irqCounter=mapper4.irqLatch;
-        //cpu.setInterruptFlag();
+        cpu.setInterruptFlag();
+        if(mapper4.intCycles===1){ppu.queuedIntCycles=21;}
         //console.log('MMC3 irq taken');
       }
     }
