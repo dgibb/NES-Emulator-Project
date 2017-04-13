@@ -137,8 +137,9 @@ step:function(){
               var y=(ppu.v&0x03E0)>>5;
               if (y===29){
                 y=0;
-                if(ppu.scanline<239&&(ppu.nametableMirroring===2)){
+                if((ppu.nametableMirroring===2)){
                 ppu.v^=0x0800;
+              //  console.log('NAMETABLE SWITCHED: ')
               }
               }else{
                 y+=1;
@@ -268,7 +269,7 @@ step:function(){
           //console.log('VBL_NMI: cycle', ppu.cycle, 'scanline', ppu.scanline, 'instance 2');
         }
 
-        if(ppu.cycle<=10&&ppu.graphicsDebug){console.log(ppu.scanline, ppu.cycle, ppu.registers[2].toString(16), ppu.nmiEnable, ppu.vblTaken)}
+        //if(ppu.cycle<=10&&ppu.graphicsDebug){console.log(ppu.scanline, ppu.cycle, ppu.registers[2].toString(16), ppu.nmiEnable, ppu.vblTaken)}
 
 				if (ppu.cycle===340){
 					ppu.scanlineMode=1;
@@ -303,8 +304,8 @@ step:function(){
 
       if (ppu.cycle>=280&&ppu.cycle<=304){  //copies ppu.t vertical data to ppu.v
         if(ppu.bgEnable){
-        ppu.v&=0x081F;
-        ppu.v|=(ppu.t&0xF7E0);
+        ppu.v&=0x041F;
+        ppu.v|=(ppu.t&0xFBE0);
         }
       }
 
@@ -370,7 +371,7 @@ fetchNTByte:function(){					//actually fetches patternTable address;
 	ppu.nametableByte=ppu.readVRam(address);//nametable Byte
   ppu.ntByteBuffer[0]=ppu.nametableByte;
   ppu.ntByteBufHelper[0]=ppu.cycle
-//  if (ppu.graphicsDebug&&ppu.scanline===124){console.log(ppu.nametableByte.toString(16), ppu.cycle)}
+//  if (ppu.graphicsDebug&&ppu.cycle===321){console.log('ppu.fetchNTByte: nt=', ((ppu.v>>10)&0x03));}
 	ppu.nametableByte=(ppu.nametableByte<<4)+ppu.patternTableOffset+(ppu.v>>12);//tile pattern address
 },
 
@@ -724,7 +725,10 @@ writeByte: function(addr, data){
 			 ppu.spriteTableOffset=(data&0x08)<<9;
 			 if (data&0x04){ppu.incrementMode=32;}else{ppu.incrementMode=1;}
 	     ppu.t&=0xF3FF;
-       ppu.t|=(data&0x3)<<10;
+       var nt=((data&0x03)<<10);
+  //     console.log('ppu.setNameTable:nametable set to', nt)
+       ppu.t|=nt;
+    //   console.log('ppu.setNameTable: nametable is', ((ppu.t>>10)&0x3), ppu.scanline, ppu.cycle);
 		break;
 
 		case 1:
@@ -755,24 +759,30 @@ writeByte: function(addr, data){
         ppu.t&=0xFFE0;
 		    ppu.t|=data>>3;
         ppu.writeToggle=1;
+      //  console.log('ppu.setScroll1: nametable is', ((ppu.t>>10)&0x3),ppu.scanline, ppu.cycle);
 		  }else{
         ppu.t&=0x0C1F;
 			  ppu.t|=((data&0x07)<<12);
 			  ppu.t|=((data&0xF8)<<2);
         ppu.writeToggle=0;
+      //  console.log('ppu.setScroll2: nametable is', ((ppu.t>>10)&0x3),ppu.scanline, ppu.cycle);
 		  }
 		break;
 
 		case 6:
 		 if(!ppu.writeToggle){
+    //   console.log('ppu.setvRamAddr1: nametable is', ((ppu.t>>10)&0x3),ppu.scanline, ppu.cycle);
 			 ppu.t&=0x00FF;
        ppu.t|=((data&0x3F)<<8);
        ppu.writeToggle=1;
+    //   console.log('ppu.setvRamAddr1: nametable is', ((ppu.t>>10)&0x3),ppu.scanline, ppu.cycle);
 		 }else{
+    //   console.log('ppu.setvRamAddr2: nametable is', ((ppu.t>>10)&0x3),ppu.scanline, ppu.cycle);
        ppu.t&=0xFF00;
        ppu.t|=data;
        ppu.v=ppu.t;
        ppu.writeToggle=0;
+    //   console.log('ppu.setvRamAddr2: nametable is', ((ppu.t>>10)&0x3),ppu.scanline, ppu.cycle);
 		 }
        ppu.a12=1;
 		break;
