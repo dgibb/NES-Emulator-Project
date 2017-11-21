@@ -16,15 +16,18 @@ console.log('server running...');
 
 app.post('/sendRom', (req, res) => {
   let valid = false;
+  const rom = new Array(0);
   req.on('data', (data) => {
-    const rom = new Uint8Array(data);
+    const temp = new Uint8Array(data);
+    console.log('Temp.length  = ', temp.length);
+    for (let i = 0; i < temp.length; i += 1) {
+      rom.push(temp[i]);
+    }
+  });
+  req.on('end', () => {
+    console.log(rom);
     valid = emulator.loadROM(rom);
-    const body = (valid) ? 'valid' : 'invalid';
-    res.writeHead(200, {
-      'Content-Length': Buffer.byteLength(body),
-      'Content-Type': 'text/plain',
-    });
-    console.log(res);
+    console.log('SENDING VALID');
     res.send(valid);
   });
 });

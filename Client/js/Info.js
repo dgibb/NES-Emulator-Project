@@ -27,7 +27,7 @@ export class Info extends React.Component {
     const reader = new FileReader;
     reader.onload = (e) => {
       const byteArray = new Uint8Array(reader.result);
-      console.log(byteArray);
+      console.log(byteArray, byteArray.length);
       xhr.send(byteArray);
     };
     const xhr = new XMLHttpRequest;
