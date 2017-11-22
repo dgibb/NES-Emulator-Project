@@ -1,7 +1,7 @@
-const memory = require('./memory');
-const debug = require('./debug tools');
-const ppu = require('./gpu');
-const input = require('./input');
+const { memory } = require('./memory');
+const { debug } = require('./debug tools');
+const { ppu } = require('./gpu');
+const { input } = require('./input');
 
 const cpu = {
 

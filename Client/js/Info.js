@@ -2,11 +2,15 @@
 
 import React from 'react';
 // import jquery from 'jquery';
-// import Client from './Client';
+import { Client } from './Client';
 
 const INVALID = 'invalid';
 const VALID = 'valid';
 const INITIAL = 'initial';
+
+function runFrame() {
+  Client.runFrame();
+}
 
 export class Info extends React.Component {
   constructor() {
@@ -33,9 +37,11 @@ export class Info extends React.Component {
     const xhr = new XMLHttpRequest;
     xhr.onreadystatechange = () => {
       if (xhr.readyState === XMLHttpRequest.DONE) {
+        const string = (xhr.responseText === 'true') ? VALID : INVALID;
         console.log('xhr response: ', xhr.responseText);
+        this.setState({ status: string });
       }
-    }
+    };
     xhr.open('POST', '/sendRom', false);
     reader.readAsArrayBuffer(file);
   }
@@ -64,7 +70,7 @@ export class Info extends React.Component {
             <div className="inner-container col-lg-8 col-md-10 col-sm-12 col-xs-12">
               <h2>Click to Run a Frame</h2>
               <div className="button-container col-xs-offset-3 col-lg-6 col-md-6 col-sm-6 col-xs-6">
-                <button id="load-ROM" onClick={this.runFrame} >Run Frame</button>
+                <button id="load-ROM" onClick={runFrame} >Run Frame</button>
               </div>
             </div>
           </div>

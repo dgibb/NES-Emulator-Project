@@ -92,7 +92,6 @@ const emulator = {
     mapperID |= cartHeader[7] & 0xF0;
     console.log('Mapper:', mapperID);
     mapperInit(mapperID);
-    console.log(memory.mapper);
   },
 
   iNES2Handler() {
@@ -107,6 +106,12 @@ const emulator = {
   showState() {
     cpu.showState();
     ppu.showState();
+  },
+
+  reset() {
+    cpu.reset();
+    ppu.reset();
+    memory.reset();
   },
 
 };

@@ -25,7 +25,7 @@ app.post('/sendRom', (req, res) => {
     }
   });
   req.on('end', () => {
-    console.log(rom);
+    console.log('rom.length  = ', rom.length);
     valid = emulator.loadROM(rom);
     console.log('SENDING VALID');
     res.send(valid);
@@ -46,9 +46,6 @@ io.sockets.on('connection', (socket) => {
 
     // tell the client which player it is
     socket.emit('player-designation', socket.player);
-
-    // save incoming rom to uint8 array
-    // socket.on('submit-rom');
 
     // handle client keypress
     socket.on('keyUp', (keyCode) => {
@@ -81,6 +78,18 @@ io.sockets.on('connection', (socket) => {
 
     socket.on('start', () => {
       emulator.rungame();
+    });
+
+    socket.on('runFrame', () => {
+      emulator.runFrame();
+    });
+
+    socket.on('disconnect', () => {
+      // remove from connections;
+      connections.splice(connections.indexOf(socket), 1);
+      if (connections.length === 0) {
+        //emulator.reset();
+      }
     });
   } else {
     socket.emit('console-full');
