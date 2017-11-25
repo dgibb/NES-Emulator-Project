@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 const { ppu, chrRom } = require('./gpu');
 const { memory } = require('./memory');
 let { prgRom } = require('./memory');
@@ -45,6 +43,8 @@ const emulator = {
         console.log(romFile[i].toString(16));
       }
     }
+    console.log('chr rom = ', chrRom);
+    console.log('prg rom = ', prgRom);
     return valid;
   },
 
@@ -99,6 +99,7 @@ const emulator = {
   },
 
   init() {
+    console.log('emulator.init');
     ppu.init();
     cpu.wRamInit();
   },

@@ -1,4 +1,4 @@
-const memory = require('./memory');
+const { memory } = require('./memory');
 
 const interrupt = {
 

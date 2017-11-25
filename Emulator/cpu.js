@@ -2695,6 +2695,7 @@ const cpu = {
 
   ex(opcode) {
     cpu.pcPrev = cpu.pc;
+    console.log(opcode);
     instructionMap[opcode]();
     cpu.cycle += cpu.clk;
     for (let i = 0; i < 3 * cpu.clk; i += 1) {
@@ -2784,15 +2785,16 @@ const cpu = {
   // initialization functions
 
   wRamInit() {
-    wRAM = new Array(0x800);
+    console.log('wRamInit');
     for (let i = 0; i < wRAM.length; i += 1) {
       wRAM[i] = 0;
     }
+    console.log(memory);
   },
 
 };
 
-let wRAM = [];
+let wRAM = Array(0x800);
 
 const instructionMap = [
   cpu.BRK, // 0x00;

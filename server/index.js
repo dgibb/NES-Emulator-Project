@@ -6,6 +6,7 @@ const io = require('socket.io').listen(server);
 const path = require('path');
 
 const { emulator } = require('../Emulator/emulator');
+const { cpu, wRAM } = require('../Emulator/cpu');
 const { input } = require('../Emulator/input');
 
 const connections = [];
@@ -28,8 +29,17 @@ app.post('/sendRom', (req, res) => {
     console.log('rom.length  = ', rom.length);
     valid = emulator.loadROM(rom);
     console.log('SENDING VALID');
+    console.log(cpu.pc);
+    if (valid) {
+      console.log('valid was true, initializing emulator');
+      emulator.init();
+    }
     res.send(valid);
   });
+});
+
+app.post('/runFrame', () => {
+  emulator.runFrame();
 });
 
 app.use(express.static(path.resolve(__dirname, '..', 'Client')));
@@ -88,10 +98,16 @@ io.sockets.on('connection', (socket) => {
       // remove from connections;
       connections.splice(connections.indexOf(socket), 1);
       if (connections.length === 0) {
-        //emulator.reset();
+        // emulator.reset();
       }
     });
   } else {
     socket.emit('console-full');
   }
 });
+
+function sendFrame(pixData) {
+  connections[0].emit('sendFrame', pixData);
+}
+
+module.exports = { sendFrame };

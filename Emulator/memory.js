@@ -1,5 +1,5 @@
-const ppu = require('./gpu');
-const apu = require('./apu');
+const { ppu } = require('./gpu');
+const { apu } = require('./apu');
 const { cpu, wRAM } = require('./cpu');
 
 const memory = {

@@ -1,4 +1,4 @@
-const apu = require('./apu');
+const { apu } = require('./apu');
 
 const input = {
 

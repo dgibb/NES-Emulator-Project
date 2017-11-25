@@ -1,5 +1,5 @@
 const { ppu, chrRom } = require('./gpu');
-const cpu = require('./cpu');
+const { cpu } = require('./cpu');
 const { memory } = require('./memory');
 let { prgRom } = require('./memory');
 

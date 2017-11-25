@@ -1,15 +1,15 @@
 /* eslint-disable no-alert */
 
 import React from 'react';
-// import jquery from 'jquery';
-import { Client } from './Client';
+import jquery from 'jquery';
+// import { Client } from '../index.html';
 
 const INVALID = 'invalid';
 const VALID = 'valid';
 const INITIAL = 'initial';
 
 function runFrame() {
-  Client.runFrame();
+  jquery.post('/runFrame', true);
 }
 
 export class Info extends React.Component {

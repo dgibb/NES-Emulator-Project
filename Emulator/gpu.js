@@ -1,5 +1,6 @@
-const memory = require('./memory');
-const cpu = require('./cpu');
+const { memory } = require('./memory');
+const { cpu } = require('./cpu');
+const { sendFrame } = require('../server/index');
 
 const ppu = {
 
@@ -266,7 +267,7 @@ const ppu = {
             ppu.setVBlankFlag();
           }
           // screen.putImageData(pixData, 0, 0);
-          // send a websocket event to client
+          sendFrame(pixData);
         }
 
         if ((ppu.registers[2] & 0x80) && ppu.nmiEnable && (!ppu.vblTaken)) {
@@ -1011,7 +1012,7 @@ const ppu = {
   },
 
   init() {
-    ppu.canvasInit();
+    //ppu.canvasInit();
     ppu.oamInit();
   },
 
