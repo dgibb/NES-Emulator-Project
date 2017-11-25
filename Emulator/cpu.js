@@ -2785,11 +2785,10 @@ const cpu = {
   // initialization functions
 
   wRamInit() {
-    console.log('wRamInit');
     for (let i = 0; i < wRAM.length; i += 1) {
       wRAM[i] = 0;
     }
-    console.log(memory);
+    console.log('wRAMInit(): logging memory:', memory);
   },
 
 };

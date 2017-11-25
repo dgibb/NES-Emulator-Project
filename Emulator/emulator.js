@@ -43,8 +43,6 @@ const emulator = {
         console.log(romFile[i].toString(16));
       }
     }
-    console.log('chr rom = ', chrRom);
-    console.log('prg rom = ', prgRom);
     return valid;
   },
 
@@ -91,6 +89,7 @@ const emulator = {
     let mapperID = (cartHeader[6] >> 4) & 0xF;
     mapperID |= cartHeader[7] & 0xF0;
     console.log('Mapper:', mapperID);
+    console.log('memory.irqVector = ', memory.irqVector);
     mapperInit(mapperID);
   },
 
@@ -99,7 +98,7 @@ const emulator = {
   },
 
   init() {
-    console.log('emulator.init');
+    console.log('running emulator.init');
     ppu.init();
     cpu.wRamInit();
   },

@@ -28,10 +28,8 @@ app.post('/sendRom', (req, res) => {
   req.on('end', () => {
     console.log('rom.length  = ', rom.length);
     valid = emulator.loadROM(rom);
-    console.log('SENDING VALID');
-    console.log(cpu.pc);
     if (valid) {
-      console.log('valid was true, initializing emulator');
+      console.log('rom was valid, initializing emulator');
       emulator.init();
     }
     res.send(valid);
