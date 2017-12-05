@@ -1,7 +1,7 @@
 const { ppu, chrRom } = require('./gpu');
 const { memory } = require('./memory');
 let { prgRom } = require('./memory');
-const { cpu } = require('./cpu');
+const { cpu, initCpuMemory } = require('./cpu');
 const { mapperInit } = require('./mappers');
 
 const emulator = {
@@ -14,6 +14,7 @@ const emulator = {
   },
 
   runFrame() {
+    initCpuMemory();
     while (ppu.scanline === 0) {
       cpu.ex(memory.readByte(cpu.pc));
     }

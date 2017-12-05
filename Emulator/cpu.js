@@ -1,7 +1,15 @@
-const { memory } = require('./memory');
 const { debug } = require('./debug tools');
 const { ppu } = require('./gpu');
 const { input } = require('./input');
+
+let memory = null;
+
+function initCpuMemory() {
+  if (!memory) {
+    memory = require('./memory').memory;
+    console.log(memory);
+  }
+}
 
 const cpu = {
 
@@ -3055,4 +3063,4 @@ const instructionMap = [
 ];
 
 
-module.exports = { cpu, wRAM };
+module.exports = { cpu, wRAM, initCpuMemory };
