@@ -10,6 +10,8 @@ Port to Node.js Server currently underway
 
 There is a working live demo at https://dgibb.github.io/MOES/nes.html
 
+local Installation will be available when node.js port is finished
+
 # Usage
 
 Visit https://dgibb.github.io/MOES/nes.html
