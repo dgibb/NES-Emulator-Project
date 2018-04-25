@@ -7,14 +7,14 @@ Part of the Multiplayer online Emulator Suite
 # Installation
 ------------
 
-There is a working live demo at http://dgibb.gihub.io/NES-Emulator-Project
+There is a working live demo at http://dgibb.github.io/NES-Emulator-Project
 
 Code can be also cloned from this repository
 
 # Usage
 ------------
 
-Visit http://dgibb.gihub.io/NES-Emulator-Project
+Visit http://dgibb.github.io/NES-Emulator-Project
 Load a rom into the browser using the input on screen
 
 **For Cloned Repository**
